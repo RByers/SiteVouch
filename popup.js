@@ -66,9 +66,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function renderStatus(status) {
-        if (status.queueLength > 0 || status.isProcessing) {
-            const processingText = status.isProcessing ? "Processing..." : "";
-            queueDiv.textContent = `Pending queries: ${status.queueLength} ${processingText}`;
+        let allTasks = [];
+        if (status.currentTask) {
+            allTasks.push(status.currentTask);
+        }
+        if (status.queue) {
+            allTasks = allTasks.concat(status.queue);
+        }
+
+        if (allTasks.length > 0) {
+            const hostnames = allTasks.map(t => t.hostname).join(', ');
+            queueDiv.textContent = `Processing: ${hostnames}`;
         } else {
             queueDiv.textContent = "";
         }

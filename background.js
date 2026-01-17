@@ -5,7 +5,7 @@ const CACHE_EXPIRE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 // In-memory queue
 let queryQueue = [];
-let isProcessing = false;
+let currentTask = null; // The task currently being processed
 
 // State icons
 const STATE_ICONS = {
@@ -81,9 +81,21 @@ async function pruneCache() {
 function addToQueue(hostname, forceRefresh = false, tabId = null) {
     const existingIndex = queryQueue.findIndex(item => item.hostname === hostname);
 
+    // Check if it's already in the queue
     if (existingIndex !== -1) {
         if (forceRefresh) queryQueue[existingIndex].forceRefresh = true;
         if (tabId) queryQueue[existingIndex].tabId = tabId;
+        return;
+    }
+
+    // Check if it's currently being processed
+    if (currentTask && currentTask.hostname === hostname) {
+        if (forceRefresh && !currentTask.forceRefresh) {
+            // It's already running but wasn't forced... we can't easily "upgrade" the running task
+            // but we could queue a new forced one if we really wanted. 
+            // For simplicity, we just let the current one finish.
+        }
+        if (tabId) currentTask.tabId = tabId; // Update tabId so icon updates correctly
         return;
     }
 
@@ -93,34 +105,33 @@ function addToQueue(hostname, forceRefresh = false, tabId = null) {
 }
 
 async function processQueue() {
-    if (isProcessing || queryQueue.length === 0) return;
+    if (currentTask || queryQueue.length === 0) return;
 
-    isProcessing = true;
-    const task = queryQueue.shift();
+    currentTask = queryQueue.shift();
     broadcastStatus();
 
     try {
-        if (!task.forceRefresh) {
-            const cached = await getFromCache(task.hostname);
+        if (!currentTask.forceRefresh) {
+            const cached = await getFromCache(currentTask.hostname);
             if (cached && !cached.isStale) {
-                await updateIconForHost(task.hostname, cached.reviews, task.tabId);
-                isProcessing = false;
+                await updateIconForHost(currentTask.hostname, cached.reviews, currentTask.tabId);
+                currentTask = null;
                 processQueue();
                 return;
             }
         }
 
-        await performGeminiQuery(task.hostname);
+        await performGeminiQuery(currentTask.hostname);
 
-        const freshData = await getFromCache(task.hostname);
+        const freshData = await getFromCache(currentTask.hostname);
         if (freshData) {
-            await updateIconForHost(task.hostname, freshData.reviews, task.tabId);
+            await updateIconForHost(currentTask.hostname, freshData.reviews, currentTask.tabId);
         }
 
     } catch (error) {
         console.error("Queue Processing Error:", error);
     } finally {
-        isProcessing = false;
+        currentTask = null;
         processQueue();
         broadcastStatus();
     }
@@ -190,26 +201,21 @@ async function updateIconForHost(hostname, reviews, specificTabId = null) {
 
     try {
         if (specificTabId) {
-            // Catch invalid icon errors
             await chrome.action.setIcon({ tabId: specificTabId, path: iconPath }).catch(() => { });
         } else {
             const tabs = await chrome.tabs.query({});
             for (const tab of tabs) {
-                // Ensure we only try to set icons on valid web pages
                 if (tab.url && tab.url.startsWith('http')) {
                     try {
                         const urlObj = new URL(tab.url);
                         if (urlObj.hostname === hostname) {
                             await chrome.action.setIcon({ tabId: tab.id, path: iconPath }).catch(() => { });
                         }
-                    } catch (e) {
-                        // Invalid URL or specific tab issue
-                    }
+                    } catch (e) { }
                 }
             }
         }
     } catch (e) {
-        // Broad catch for any unexpected icon errors
         console.error("Icon Update Error:", e);
     }
 }
@@ -252,9 +258,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
         if (tab.url) {
             handleNavigation(activeInfo.tabId, tab.url);
         }
-    } catch (e) {
-        // Tab invalid or closed
-    }
+    } catch (e) { }
 });
 
 chrome.runtime.onStartup.addListener(pruneCache);
@@ -266,10 +270,9 @@ chrome.runtime.onStartup.addListener(pruneCache);
 function broadcastStatus() {
     chrome.runtime.sendMessage({
         type: 'STATUS_UPDATE',
-        queueLength: queryQueue.length,
-        isProcessing: isProcessing
+        queue: queryQueue,
+        currentTask: currentTask
     }, () => {
-        // Suppress "Receiving end does not exist"
         if (chrome.runtime.lastError) {
             // Safe to ignore
         }
@@ -281,7 +284,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         (async () => {
             const qStatus = {
                 queue: queryQueue,
-                isProcessing: isProcessing
+                currentTask: currentTask
             };
 
             if (request.hostname) {
