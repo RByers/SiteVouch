@@ -1,6 +1,8 @@
 const input = document.getElementById('new-source');
 const addBtn = document.getElementById('add-btn');
 const list = document.getElementById('sources-list');
+const apiKeyInput = document.getElementById('api-key');
+const saveKeyBtn = document.getElementById('save-key-btn');
 
 function renderList(sources) {
     list.innerHTML = '';
@@ -18,10 +20,20 @@ function renderList(sources) {
     });
 }
 
-function loadSources() {
-    chrome.storage.sync.get('sources', (data) => {
+function loadSettings() {
+    chrome.storage.sync.get(['sources', 'geminiApiKey'], (data) => {
         const sources = data.sources || [];
         renderList(sources);
+        if (data.geminiApiKey) {
+            apiKeyInput.value = data.geminiApiKey;
+        }
+    });
+}
+
+function saveApiKey() {
+    const key = apiKeyInput.value.trim();
+    chrome.storage.sync.set({ geminiApiKey: key }, () => {
+        alert('API Key saved!');
     });
 }
 
@@ -51,8 +63,9 @@ function removeSource(index) {
     });
 }
 
-document.addEventListener('DOMContentLoaded', loadSources);
+document.addEventListener('DOMContentLoaded', loadSettings);
 addBtn.addEventListener('click', addSource);
+saveKeyBtn.addEventListener('click', saveApiKey);
 input.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') addSource();
 });
