@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', async () => {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const urlDiv = document.getElementById('site-url');
+    const hostSpan = document.getElementById('site-hostname');
     const refreshBtn = document.getElementById('refresh-btn');
     const resultDiv = document.getElementById('gemini-result');
     const queueDiv = document.getElementById('queue-status');
@@ -10,14 +10,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (tab && tab.url) {
         try {
             currentHostname = new URL(tab.url).hostname;
-            urlDiv.textContent = tab.url;
+            hostSpan.textContent = currentHostname;
         } catch (e) {
             currentHostname = "";
-            urlDiv.textContent = "Invalid URL";
+            hostSpan.textContent = "Invalid URL";
         }
     } else {
-        urlDiv.textContent = "No URL found";
+        hostSpan.textContent = "No URL";
         refreshBtn.disabled = true;
+        refreshBtn.classList.add('disabled'); // Ensure style updates if needed
     }
 
     // -------------------------------------------------------------
