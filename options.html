@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <style>
+        body {
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 20px;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        input[type="text"] {
+            padding: 8px;
+            flex-grow: 1;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        button {
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        button.remove {
+            background-color: #f44336;
+            margin-left: 10px;
+            padding: 4px 8px;
+            font-size: 12px;
+        }
+
+        button.remove:hover {
+            background-color: #d32f2f;
+        }
+
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        li {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+    </style>
+    <title>SiteVouch Settings</title>
+</head>
+
+<body>
+    <h1>Reputation Sources (Trusted Domains)</h1>
+    <div class="input-group">
+        <input type="text" id="new-source" placeholder="Enter domain (e.g., example.com)">
+        <button id="add-btn">Add</button>
+    </div>
+    <ul id="sources-list"></ul>
+    <script src="options.js"></script>
+</body>
+
+</html>

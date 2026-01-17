@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "SiteVouch",
+  "version": "1.0",
+  "description": "Show reputation score for sites based on user-defined sources.",
+  "permissions": [
+    "tabs",
+    "storage"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/neutral.png",
+      "48": "icons/neutral.png",
+      "128": "icons/neutral.png"
+    }
+  },
+  "icons": {
+    "16": "icons/neutral.png",
+    "48": "icons/neutral.png",
+    "128": "icons/neutral.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": false
+  }
+}
