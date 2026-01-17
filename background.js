@@ -7,20 +7,38 @@ const CACHE_EXPIRE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 let queryQueue = [];
 let currentTask = null; // The task currently being processed
 
-// State icons
-const STATE_ICONS = {
-    positive: "icons/positive.png",
-    neutral: "icons/neutral.png",
-    negative: "icons/negative.png",
-    unknown: "icons/unknown.png"
-};
+function calculateRating(reviews) {
+    if (!reviews || reviews.length === 0) return null;
+    const sum = reviews.reduce((acc, r) => acc + (r.rating || 0), 0);
+    return sum / reviews.length;
+}
 
-// Helper: Determine icon from avg rating
-function getIconForRating(rating) {
-    if (rating === undefined || rating === null) return "icons/unknown.png";
-    if (rating >= 4) return "icons/positive.png";
-    if (rating <= 2.5) return "icons/negative.png";
-    return "icons/neutral.png";
+// Helper: Determine badge from avg rating
+async function updateBadgeForRating(tabId, reviews) {
+    if (!reviews || reviews.length === 0) {
+        // Clear badge if no data
+        await chrome.action.setBadgeText({ text: "", tabId }).catch(() => { });
+        return;
+    }
+
+    const rating = calculateRating(reviews);
+    let text = "👉";
+    let color = "#FFEE58"; // Yellow-ish
+
+    if (rating >= 4) {
+        text = "👍";
+        color = "#66BB6A"; // Green
+    } else if (rating <= 2.5) {
+        text = "👎";
+        color = "#EF5350"; // Red
+    }
+
+    try {
+        await chrome.action.setBadgeText({ text: text, tabId });
+        await chrome.action.setBadgeBackgroundColor({ color: color, tabId });
+    } catch (e) {
+        // Tab likely closed
+    }
 }
 
 // ---------------------------------------------------------
@@ -114,7 +132,7 @@ async function processQueue() {
         if (!currentTask.forceRefresh) {
             const cached = await getFromCache(currentTask.hostname);
             if (cached && !cached.isStale) {
-                await updateIconForHost(currentTask.hostname, cached.reviews, currentTask.tabId);
+                await updateBadgeForRating(currentTask.tabId, cached.reviews);
                 currentTask = null;
                 processQueue();
                 return;
@@ -125,7 +143,7 @@ async function processQueue() {
 
         const freshData = await getFromCache(currentTask.hostname);
         if (freshData) {
-            await updateIconForHost(currentTask.hostname, freshData.reviews, currentTask.tabId);
+            await updateBadgeForRating(currentTask.tabId, freshData.reviews);
         }
 
     } catch (error) {
@@ -186,7 +204,7 @@ async function performGeminiQuery(hostname) {
 }
 
 // ---------------------------------------------------------
-// UI / Icon Logic
+// UI / Badge Logic
 // ---------------------------------------------------------
 
 function calculateRating(reviews) {
@@ -195,37 +213,16 @@ function calculateRating(reviews) {
     return sum / reviews.length;
 }
 
-async function updateIconForHost(hostname, reviews, specificTabId = null) {
-    const rating = calculateRating(reviews);
-    const iconPath = getIconForRating(rating);
-
-    try {
-        if (specificTabId) {
-            await chrome.action.setIcon({ tabId: specificTabId, path: iconPath }).catch(() => { });
-        } else {
-            const tabs = await chrome.tabs.query({});
-            for (const tab of tabs) {
-                if (tab.url && tab.url.startsWith('http')) {
-                    try {
-                        const urlObj = new URL(tab.url);
-                        if (urlObj.hostname === hostname) {
-                            await chrome.action.setIcon({ tabId: tab.id, path: iconPath }).catch(() => { });
-                        }
-                    } catch (e) { }
-                }
-            }
-        }
-    } catch (e) {
-        console.error("Icon Update Error:", e);
-    }
-}
-
 // ---------------------------------------------------------
 // Navigation & Listeners
 // ---------------------------------------------------------
 
 async function handleNavigation(tabId, url) {
-    if (!url || !url.startsWith('http')) return;
+    if (!url || !url.startsWith('http')) {
+        // Clear badge for non-http pages
+        await chrome.action.setBadgeText({ text: "", tabId }).catch(() => { });
+        return;
+    }
 
     try {
         const hostname = new URL(url).hostname;
@@ -233,10 +230,13 @@ async function handleNavigation(tabId, url) {
         const cached = await getFromCache(hostname);
 
         if (cached) {
-            await updateIconForHost(hostname, cached.reviews, tabId);
+            await updateBadgeForRating(tabId, cached.reviews);
             if (!cached.isStale) return;
         } else {
-            await chrome.action.setIcon({ tabId: tabId, path: "icons/unknown.png" }).catch(() => { });
+            // Clear/reset badge while loading? Or keep empty? 
+            // "Unknown" state effectively means no badge or maybe "?" 
+            // User requested "clear the badge" if no results.
+            await chrome.action.setBadgeText({ text: "", tabId }).catch(() => { });
         }
 
         addToQueue(hostname, false, tabId);

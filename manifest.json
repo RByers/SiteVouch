@@ -10,15 +10,13 @@
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
-      "16": "icons/neutral.png",
-      "48": "icons/neutral.png",
-      "128": "icons/neutral.png"
+      "32": "icons/SiteVouch32.png",
+      "128": "icons/SiteVouch128.png"
     }
   },
   "icons": {
-    "16": "icons/neutral.png",
-    "48": "icons/neutral.png",
-    "128": "icons/neutral.png"
+    "32": "icons/SiteVouch32.png",
+    "128": "icons/SiteVouch128.png"
   },
   "background": {
     "service_worker": "background.js"
