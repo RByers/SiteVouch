@@ -3,82 +3,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     const urlDiv = document.getElementById('site-url');
     const refreshBtn = document.getElementById('refresh-btn');
     const resultDiv = document.getElementById('gemini-result');
+    const queueDiv = document.getElementById('queue-status');
 
-    let currentUrl = "";
+    let currentHostname = "";
 
     if (tab && tab.url) {
-        currentUrl = tab.url;
-        urlDiv.textContent = currentUrl;
+        try {
+            currentHostname = new URL(tab.url).hostname;
+            urlDiv.textContent = tab.url;
+        } catch (e) {
+            currentHostname = "";
+            urlDiv.textContent = "Invalid URL";
+        }
     } else {
         urlDiv.textContent = "No URL found";
         refreshBtn.disabled = true;
     }
 
-    refreshBtn.addEventListener('click', async () => {
-        resultDiv.textContent = "Loading...";
-        refreshBtn.disabled = true;
+    // -------------------------------------------------------------
+    // Rendering logic
+    // -------------------------------------------------------------
+    function renderResult(reviews) {
+        if (!reviews || reviews.length === 0) {
+            resultDiv.textContent = "No relevant reputation data found.";
+            return;
+        }
 
-        try {
-            const data = await chrome.storage.sync.get(['geminiApiKey', 'sources']);
-            const apiKey = data.geminiApiKey;
-            const sources = data.sources || [];
-
-            if (!apiKey) {
-                resultDiv.textContent = "Error: Please set Gemini API Key in options.";
-                refreshBtn.disabled = false;
-                return;
-            }
-
-            if (sources.length === 0) {
-                resultDiv.textContent = "Warning: No reputation sources listed in options.";
-            }
-
-            const urlObj = new URL(currentUrl);
-            const hostname = urlObj.hostname;
-
-            const prompt = `Analyze the reputation of "${hostname}" using the following sources: ${sources.join(', ')}.
-        Return a JSON object with a key "reviews" containing an array of entries.
-        Only include entries for relevant sources where valid reputation signals are found.
-        Each entry must have:
-        - "source": Name of the source.
-        - "url": Direct URL to the reputation page on that source.
-        - "rating": A number (0-5) representing the star rating.
-        - "summary": A very brief summary (max 3 bullet points of 6 words each).`;
-
-            const model = 'gemini-3-flash-preview';
-
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    contents: [{
-                        parts: [{ text: prompt }]
-                    }],
-                    generationConfig: {
-                        responseMimeType: "application/json"
-                    },
-                    tools: [{
-                        google_search: {}
-                    }]
-                })
-            });
-
-            if (!response.ok) {
-                const errorBody = await response.text();
-                throw new Error(`API Error: ${response.status} Details: ${errorBody}`);
-            }
-
-            const result = await response.json();
-            const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-            const jsonResult = JSON.parse(text);
-            const reviews = jsonResult.reviews || [];
-
-            if (reviews.length === 0) {
-                resultDiv.textContent = "No relevant reputation data found.";
-            } else {
-                let tableHtml = `
+        let tableHtml = `
             <table>
                 <thead>
                     <tr>
@@ -88,38 +39,85 @@ document.addEventListener('DOMContentLoaded', async () => {
                     </tr>
                 </thead>
                 <tbody>
+        `;
+
+        reviews.forEach(review => {
+            const summaryList = Array.isArray(review.summary) ? review.summary.map(s => `<li>${s}</li>`).join('') : review.summary;
+            tableHtml += `
+                <tr>
+                    <td><a class="source-link" data-url="${review.url}">${review.source}</a></td>
+                    <td>${review.rating}/5</td>
+                    <td><ul>${summaryList}</ul></td>
+                </tr>
             `;
+        });
 
-                reviews.forEach(review => {
-                    const summaryList = Array.isArray(review.summary) ? review.summary.map(s => `<li>${s}</li>`).join('') : review.summary;
-                    tableHtml += `
-                    <tr>
-                        <td><a class="source-link" data-url="${review.url}">${review.source}</a></td>
-                        <td>${review.rating}/5</td>
-                        <td><ul>${summaryList}</ul></td>
-                    </tr>
-                `;
-                });
+        tableHtml += `</tbody></table>`;
+        resultDiv.innerHTML = tableHtml;
 
-                tableHtml += `</tbody></table>`;
-                resultDiv.innerHTML = tableHtml;
+        document.querySelectorAll('.source-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                const url = e.target.getAttribute('data-url');
+                if (url) {
+                    chrome.tabs.create({ url: url });
+                }
+            });
+        });
+    }
 
-                // Add click handlers for links
-                document.querySelectorAll('.source-link').forEach(link => {
-                    link.addEventListener('click', (e) => {
-                        const url = e.target.getAttribute('data-url');
-                        if (url) {
-                            chrome.tabs.create({ url: url });
-                        }
-                    });
+    function renderStatus(status) {
+        if (status.queueLength > 0 || status.isProcessing) {
+            const processingText = status.isProcessing ? "Processing..." : "";
+            queueDiv.textContent = `Pending queries: ${status.queueLength} ${processingText}`;
+        } else {
+            queueDiv.textContent = "";
+        }
+
+        if (status.currentResult) {
+            renderResult(status.currentResult.reviews);
+        }
+    }
+
+    // -------------------------------------------------------------
+    // Communication logic
+    // -------------------------------------------------------------
+
+    // Initial fetch
+    if (currentHostname) {
+        chrome.runtime.sendMessage({ type: 'GET_STATUS', hostname: currentHostname }, (response) => {
+            if (chrome.runtime.lastError) {
+                console.warn("Background service probably not ready:", chrome.runtime.lastError.message);
+                return;
+            }
+            if (response) {
+                renderStatus(response);
+            }
+        });
+    }
+
+    // Listen for updates from background
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        if (request.type === 'STATUS_UPDATE') {
+            if (currentHostname) {
+                chrome.runtime.sendMessage({ type: 'GET_STATUS', hostname: currentHostname }, (response) => {
+                    if (chrome.runtime.lastError) return;
+                    if (response) renderStatus(response);
                 });
             }
-
-        } catch (error) {
-            console.error(error);
-            resultDiv.textContent = "Error: " + error.message;
-        } finally {
-            refreshBtn.disabled = false;
         }
+    });
+
+    // Refresh handler
+    refreshBtn.addEventListener('click', () => {
+        if (!currentHostname) return;
+
+        resultDiv.textContent = "Refreshing...";
+
+        chrome.runtime.sendMessage({ type: 'REFRESH', hostname: currentHostname }, (response) => {
+            if (chrome.runtime.lastError) {
+                resultDiv.textContent = "Error: " + chrome.runtime.lastError.message;
+                return;
+            }
+        });
     });
 });

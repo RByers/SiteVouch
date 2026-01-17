@@ -62,6 +62,13 @@ th {
     cursor: not-allowed;
 }
 
+#queue-status {
+    margin-top: 10px;
+    font-size: 11px;
+    color: #888;
+    font-style: italic;
+}
+
 #gemini-result {
     margin-top: 15px;
     font-size: 13px;

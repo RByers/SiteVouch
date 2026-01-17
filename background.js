@@ -1,8 +1,13 @@
 // background.js
 
-// Default state is neutral or unknown.
-// For now, we'll keep it simple.
+const CACHE_STALE_MS = 24 * 60 * 60 * 1000; // 24 hours
+const CACHE_EXPIRE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
+// In-memory queue
+let queryQueue = [];
+let isProcessing = false;
+
+// State icons
 const STATE_ICONS = {
     positive: "icons/positive.png",
     neutral: "icons/neutral.png",
@@ -10,90 +15,287 @@ const STATE_ICONS = {
     unknown: "icons/unknown.png"
 };
 
-// Placeholder for reputation logic
-async function getReputationState(url) {
-    if (!url) return "neutral";
+// Helper: Determine icon from avg rating
+function getIconForRating(rating) {
+    if (rating === undefined || rating === null) return "icons/unknown.png";
+    if (rating >= 4) return "icons/positive.png";
+    if (rating <= 2.5) return "icons/negative.png";
+    return "icons/neutral.png";
+}
 
-    try {
-        const urlObj = new URL(url);
-        const hostname = urlObj.hostname;
+// ---------------------------------------------------------
+// Cache Logic
+// ---------------------------------------------------------
 
-        // TODO: Fetch sources from storage and check against them.
-        // For now, let's hardcode a demonstration logic or just check storage if possible.
+async function getFromCache(hostname) {
+    const key = `cache_${hostname}`;
+    const data = await chrome.storage.local.get(key);
+    const entry = data[key];
 
-        const { sources } = await chrome.storage.sync.get("sources");
-        if (!sources || !Array.isArray(sources)) return "unknown";
+    if (!entry) return null;
 
-        // Simple check: if hostname is in sources, we might consider it "positive" or check its value?
-        // The requirement says "reputation sources the user lists". 
-        // It implies the user lists sources that PROVIDE reputation, OR lists sites?
-        // "reputation score for a site based on a set of reputation sources the user lists"
-        // This sounds like the user provides a URL to a list (like a blocklist/allowlist) or an API?
-        // Or maybe the user just lists domains they vouch for?
-        // "show a reputation score for a site based on a set of reputation sources"
-        // This is ambiguous. "Reputation Sources". 
-        // Let's assume for this "Basic" version: The user adds domains to a "Trusted" list (Positive) or "Untrusted" list (Negative)?
-        // OR: The user adds a URL that provides a list of reputation data.
-        // Given "add and remove URLs to a list of reputation sources", it implies the user adds URLs OF SOURCES.
-        // But since we need a "Basic" extension without external fetch complexity if possible, 
-        // maybe for this v1 allow the user to just add "Trusted Domains" directly? 
-        // Wait, "reputation sources" usually means a server.
-        // But "Basic chrome extension... auto show reputation score... sources the user lists".
-        // "For now the settings page should just allow the user to add and remove URLs to a list of reputation sources."
+    const age = Date.now() - entry.timestamp;
+    if (age > CACHE_EXPIRE_MS) {
+        chrome.storage.local.remove(key); // Expired
+        return null;
+    }
 
-        // Let's interpret "Reputation Sources" as: A list of domains that are "Vouched" for.
-        // If the current site is in the list -> Positive.
-        // If not -> Unknown/Neutral.
+    // Return entry even if stale (callers can decide to refresh)
+    entry.isStale = age > CACHE_STALE_MS;
+    return entry;
+}
 
-        // Let's stick to: User lists "Safe Sites".
-        // If we find the site in the list, it's Positive.
-        // If not, Unknown.
+async function saveToCache(hostname, reviews) {
+    const key = `cache_${hostname}`;
+    const entry = {
+        hostname: hostname,
+        timestamp: Date.now(),
+        reviews: reviews
+    };
+    await chrome.storage.local.set({ [key]: entry });
+    return entry;
+}
 
-        // We'll check if hostname includes any of the user-listed strings.
-        if (sources.some(source => hostname.includes(source))) {
-            return "positive";
+async function pruneCache() {
+    const allData = await chrome.storage.local.get(null);
+    const now = Date.now();
+    const keysToRemove = [];
+
+    for (const [key, value] of Object.entries(allData)) {
+        if (key.startsWith('cache_') && value.timestamp) {
+            if (now - value.timestamp > CACHE_EXPIRE_MS) {
+                keysToRemove.push(key);
+            }
         }
+    }
 
-        return "unknown";
-
-    } catch (e) {
-        console.error("Invalid URL", url);
-        return "neutral";
+    if (keysToRemove.length > 0) {
+        await chrome.storage.local.remove(keysToRemove);
     }
 }
 
-async function updateTabIcon(tabId, url) {
-    const state = await getReputationState(url);
-    const iconPath = STATE_ICONS[state];
+// ---------------------------------------------------------
+// Queue & Processing Logic
+// ---------------------------------------------------------
 
-    await chrome.action.setIcon({
-        tabId: tabId,
-        path: {
-            "16": iconPath,
-            "48": iconPath,
-            "128": iconPath
+function addToQueue(hostname, forceRefresh = false, tabId = null) {
+    const existingIndex = queryQueue.findIndex(item => item.hostname === hostname);
+
+    if (existingIndex !== -1) {
+        if (forceRefresh) queryQueue[existingIndex].forceRefresh = true;
+        if (tabId) queryQueue[existingIndex].tabId = tabId;
+        return;
+    }
+
+    queryQueue.push({ hostname, forceRefresh, tabId });
+    processQueue();
+    broadcastStatus(); // Notify popup
+}
+
+async function processQueue() {
+    if (isProcessing || queryQueue.length === 0) return;
+
+    isProcessing = true;
+    const task = queryQueue.shift();
+    broadcastStatus();
+
+    try {
+        if (!task.forceRefresh) {
+            const cached = await getFromCache(task.hostname);
+            if (cached && !cached.isStale) {
+                await updateIconForHost(task.hostname, cached.reviews, task.tabId);
+                isProcessing = false;
+                processQueue();
+                return;
+            }
         }
-    });
+
+        await performGeminiQuery(task.hostname);
+
+        const freshData = await getFromCache(task.hostname);
+        if (freshData) {
+            await updateIconForHost(task.hostname, freshData.reviews, task.tabId);
+        }
+
+    } catch (error) {
+        console.error("Queue Processing Error:", error);
+    } finally {
+        isProcessing = false;
+        processQueue();
+        broadcastStatus();
+    }
+}
+
+// ---------------------------------------------------------
+// Gemini API Logic
+// ---------------------------------------------------------
+
+async function performGeminiQuery(hostname) {
+    const { geminiApiKey, sources } = await chrome.storage.sync.get(['geminiApiKey', 'sources']);
+
+    if (!geminiApiKey || !sources || sources.length === 0) {
+        return;
+    }
+
+    const prompt = `Analyze the reputation of "${hostname}" using the following sources: ${sources.join(', ')}.
+    Return a JSON object with a key "reviews" containing an array of entries.
+    Only include entries for relevant sources where valid reputation signals are found.
+    Each entry must have:
+    - "source": Name of the source.
+    - "url": Direct URL to the reputation page on that source.
+    - "rating": A number (0-5) representing the star rating.
+    - "summary": A very brief summary (max 3 bullet points of 6 words each).`;
+
+    const model = 'gemini-3-flash-preview';
+
+    try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: { responseMimeType: "application/json" },
+                tools: [{ google_search: {} }]
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`API Error: ${response.status}`);
+        }
+
+        const result = await response.json();
+        const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+        const jsonResult = JSON.parse(text);
+
+        await saveToCache(hostname, jsonResult.reviews || []);
+
+    } catch (e) {
+        console.error("Gemini API Failed", e);
+    }
+}
+
+// ---------------------------------------------------------
+// UI / Icon Logic
+// ---------------------------------------------------------
+
+function calculateRating(reviews) {
+    if (!reviews || reviews.length === 0) return null;
+    const sum = reviews.reduce((acc, r) => acc + (r.rating || 0), 0);
+    return sum / reviews.length;
+}
+
+async function updateIconForHost(hostname, reviews, specificTabId = null) {
+    const rating = calculateRating(reviews);
+    const iconPath = getIconForRating(rating);
+
+    try {
+        if (specificTabId) {
+            // Catch invalid icon errors
+            await chrome.action.setIcon({ tabId: specificTabId, path: iconPath }).catch(() => { });
+        } else {
+            const tabs = await chrome.tabs.query({});
+            for (const tab of tabs) {
+                // Ensure we only try to set icons on valid web pages
+                if (tab.url && tab.url.startsWith('http')) {
+                    try {
+                        const urlObj = new URL(tab.url);
+                        if (urlObj.hostname === hostname) {
+                            await chrome.action.setIcon({ tabId: tab.id, path: iconPath }).catch(() => { });
+                        }
+                    } catch (e) {
+                        // Invalid URL or specific tab issue
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        // Broad catch for any unexpected icon errors
+        console.error("Icon Update Error:", e);
+    }
+}
+
+// ---------------------------------------------------------
+// Navigation & Listeners
+// ---------------------------------------------------------
+
+async function handleNavigation(tabId, url) {
+    if (!url || !url.startsWith('http')) return;
+
+    try {
+        const hostname = new URL(url).hostname;
+
+        const cached = await getFromCache(hostname);
+
+        if (cached) {
+            await updateIconForHost(hostname, cached.reviews, tabId);
+            if (!cached.isStale) return;
+        } else {
+            await chrome.action.setIcon({ tabId: tabId, path: "icons/unknown.png" }).catch(() => { });
+        }
+
+        addToQueue(hostname, false, tabId);
+
+    } catch (e) {
+        console.error("Nav Error", e);
+    }
 }
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (changeInfo.status === 'complete' && tab.url) {
-        updateTabIcon(tabId, tab.url);
+        handleNavigation(tabId, tab.url);
     }
 });
 
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
-    const tab = await chrome.tabs.get(activeInfo.tabId);
-    if (tab.url) {
-        updateTabIcon(activeInfo.tabId, tab.url);
+    try {
+        const tab = await chrome.tabs.get(activeInfo.tabId);
+        if (tab.url) {
+            handleNavigation(activeInfo.tabId, tab.url);
+        }
+    } catch (e) {
+        // Tab invalid or closed
     }
 });
 
-// Initialize sources if empty
-chrome.runtime.onInstalled.addListener(() => {
-    chrome.storage.sync.get("sources", (data) => {
-        if (!data.sources) {
-            chrome.storage.sync.set({ sources: [] });
+chrome.runtime.onStartup.addListener(pruneCache);
+
+// ---------------------------------------------------------
+// Message Handling (Popup Communication)
+// ---------------------------------------------------------
+
+function broadcastStatus() {
+    chrome.runtime.sendMessage({
+        type: 'STATUS_UPDATE',
+        queueLength: queryQueue.length,
+        isProcessing: isProcessing
+    }, () => {
+        // Suppress "Receiving end does not exist"
+        if (chrome.runtime.lastError) {
+            // Safe to ignore
         }
     });
+}
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.type === 'GET_STATUS') {
+        (async () => {
+            const qStatus = {
+                queue: queryQueue,
+                isProcessing: isProcessing
+            };
+
+            if (request.hostname) {
+                const cached = await getFromCache(request.hostname);
+                qStatus.currentResult = cached;
+            }
+            sendResponse(qStatus);
+        })();
+        return true;
+    }
+
+    if (request.type === 'REFRESH') {
+        const hostname = request.hostname;
+        addToQueue(hostname, true);
+        sendResponse({ joined: true });
+    }
 });
