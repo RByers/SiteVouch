@@ -30,7 +30,7 @@ function loadSettings() {
         if (data.preferredModel) {
             modelSelect.value = data.preferredModel;
         } else {
-            modelSelect.value = "gemini3-flash-preview"; // Default
+            modelSelect.value = "gemini-3-flash-preview"; // Default
         }
     });
 }

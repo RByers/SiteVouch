@@ -54,7 +54,7 @@ async function getFromCache(hostname) {
 
     // Check model version match
     const { preferredModel } = await chrome.storage.sync.get(['preferredModel']);
-    const currentModel = preferredModel || 'gemini3-flash-preview';
+    const currentModel = preferredModel || 'gemini-3-flash-preview';
 
     if (entry.model !== currentModel) {
         // Model mismatch - treat as stale/invalid (or just return null to force re-fetch)
@@ -185,9 +185,11 @@ async function performGeminiQuery(hostname) {
     - "source": Name of the source.
     - "url": Direct URL to the reputation page on that source.
     - "rating": A number (0-5) representing the star rating.
-    - "summary": A very brief summary (max 3 bullet points of 6 words each).`;
+    - "summary": An array of up to three bullet point summaries (max 6 words each).
+    Rules:
+    - Do NOT invent URLs. If a search result does not explicitly contain a review link, omit the entry.`;
 
-    const model = preferredModel || 'gemini3-flash-preview';
+    const model = preferredModel || 'gemini-3-flash-preview';
 
     try {
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`, {
