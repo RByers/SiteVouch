@@ -31,14 +31,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (rating >= i) {
                 fillPercentage = 100;
             } else if (rating > i - 1) {
-                const decimal = rating - (i - 1);
-                // Support exact half star logic roughly
-                fillPercentage = decimal >= 0.5 ? 50 : 0;
-                // Or better: precise percentage? User asked for "4.5 stars drawn as 4 yellow stars and one star that is half yellow"
-                // Let's support 50% split for simplicity or based on value.
-                // Re-reading: "4.5 stars drawn as 4 yellow ... and one star that is half yellow"
-                // This implies strict half-star increments.
-                fillPercentage = Math.round(decimal * 2) * 50;
+                fillPercentage = (rating - (i - 1)) * 100;
             }
 
             const gradientId = `star-grad-${i}-${Math.round(Math.random() * 10000)}`;
