@@ -1,7 +1,7 @@
 // background.js
 
-const CACHE_STALE_MS = 24 * 60 * 60 * 1000; // 24 hours
-const CACHE_EXPIRE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const CACHE_STALE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const CACHE_EXPIRE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // In-memory queue
 let queryQueue = [];
