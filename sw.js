@@ -172,7 +172,10 @@ async function processQueue() {
 // ---------------------------------------------------------
 
 async function performGeminiQuery(hostname) {
-    const { geminiApiKey, sources, preferredModel } = await chrome.storage.sync.get(['geminiApiKey', 'sources', 'preferredModel']);
+    const { geminiApiKey, sources, preferredModel, maxBullets, maxWords } = await chrome.storage.sync.get(['geminiApiKey', 'sources', 'preferredModel', 'maxBullets', 'maxWords']);
+
+    const limitBullets = maxBullets || 3;
+    const limitWords = maxWords || 6;
 
     if (!geminiApiKey || !sources || sources.length === 0) {
         return;
@@ -190,7 +193,7 @@ async function performGeminiQuery(hostname) {
     - If a source has no numeric rating, estimate a sentiment score (0-5).
     - Only include entries for provided sources where valid reputation signals are found.
     - Do NOT invent URLs, provide only exactly URLs from search results. If a search result does not explicitly contain a review link, omit the entry.
-    - Return at most 3 points in the summary, max 6 words each.`;
+    - Return at most ${limitBullets} points in the summary, max ${limitWords} words each.`;
 
     const model = preferredModel || 'gemini-3-flash-preview';
 
@@ -208,8 +211,8 @@ async function performGeminiQuery(hostname) {
                         "rating": { "type": "NUMBER", "description": "Star rating from 0 to 5" },
                         "summary": {
                             "type": "ARRAY",
-                            "description": "Key points summarizing the reputation, max 3 points",
-                            "items": { "type": "STRING", "description": "Bullet point summary (max 6 words)" }
+                            "description": `Key points summarizing the reputation, max ${limitBullets} points`,
+                            "items": { "type": "STRING", "description": `Bullet point summary (max ${limitWords} words)` }
                         }
                     },
                     "required": ["source", "url", "rating", "summary"]

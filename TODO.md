@@ -1,0 +1,3 @@
+- Add options for configuring the detail in the popup view. Use input type=number controls allowing the user to increase / decrease the maximum number of bullets and max words per bullet (default to 3 bullets and 6 words per bullet).
+- Update the popup view to use a lightgrey background on rows where the provided URL's hostname does not match the hostname from our reputation list
+- Add an option (off by default) to the trusted sources list to "Use other sources from Google Search". This causes the prompt to change to indicate that additional sources should be included where relevant. 

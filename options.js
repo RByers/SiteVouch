@@ -3,6 +3,8 @@ const addBtn = document.getElementById('add-btn');
 const list = document.getElementById('sources-list');
 const apiKeyInput = document.getElementById('apiKey');
 const modelSelect = document.getElementById('modelSelect');
+const maxBulletsInput = document.getElementById('maxBullets');
+const maxWordsInput = document.getElementById('maxWords');
 
 function renderList(sources) {
     list.innerHTML = '';
@@ -21,7 +23,7 @@ function renderList(sources) {
 }
 
 function loadSettings() {
-    chrome.storage.sync.get(['sources', 'geminiApiKey', 'preferredModel'], (data) => {
+    chrome.storage.sync.get(['sources', 'geminiApiKey', 'preferredModel', 'maxBullets', 'maxWords'], (data) => {
         const sources = data.sources || [];
         renderList(sources);
         if (data.geminiApiKey) {
@@ -32,6 +34,9 @@ function loadSettings() {
         } else {
             modelSelect.value = "gemini-3-flash-preview"; // Default
         }
+
+        if (data.maxBullets) maxBulletsInput.value = data.maxBullets;
+        if (data.maxWords) maxWordsInput.value = data.maxWords;
     });
 }
 
@@ -44,6 +49,16 @@ apiKeyInput.addEventListener('input', () => {
 modelSelect.addEventListener('change', () => {
     const model = modelSelect.value;
     chrome.storage.sync.set({ preferredModel: model });
+});
+
+maxBulletsInput.addEventListener('change', () => {
+    const val = parseInt(maxBulletsInput.value, 10);
+    if (val > 0) chrome.storage.sync.set({ maxBullets: val });
+});
+
+maxWordsInput.addEventListener('change', () => {
+    const val = parseInt(maxWordsInput.value, 10);
+    if (val > 0) chrome.storage.sync.set({ maxWords: val });
 });
 
 function addSource() {
