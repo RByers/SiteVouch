@@ -18,6 +18,11 @@ body {
     align-items: center;
 }
 
+.header-actions {
+    display: flex;
+    align-items: center;
+}
+
 .header-icon {
     width: 32px;
     height: 32px;
