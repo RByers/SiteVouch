@@ -178,9 +178,17 @@ async function performGeminiQuery(hostname) {
         return;
     }
 
-    const prompt = `Analyze the reputation of "${hostname}" using the following sources: ${sources.join(', ')}.
+    const prompt = `
+    You are a websitesite reputation analyzer.
+    Target Hostname: "${hostname}"
+
+    Step 1: Search for reviews of "${hostname}" on sources: ${sources.join(', ')}.
+    Step 2: For each result, verify if it is a review page for the SPECIFIC target hostname.
+    Step 3: Extract the rating and summary.
+  
     Rules:
-    - Only include entries for relevant sources where valid reputation signals are found.
+    - If a source has no numeric rating, estimate a sentiment score (0-5).
+    - Only include entries for provided sources where valid reputation signals are found.
     - Do NOT invent URLs, provide only exactly URLs from search results. If a search result does not explicitly contain a review link, omit the entry.
     - Return at most 3 points in the summary, max 6 words each.`;
 
