@@ -7,26 +7,64 @@
 </head>
 
 <body>
-    <h1>Configuration</h1>
-    <div class="option-group">
-        <label for="apiKey">Gemini API Key:</label>
-        <input type="password" id="apiKey" placeholder="Enter API Key">
-    </div>
+    <!-- Hidden radio buttons for state management -->
+    <input type="radio" name="nav-tab" id="tab-config" checked hidden>
+    <input type="radio" name="nav-tab" id="tab-sources" hidden>
 
-    <div class="option-group">
-        <label for="modelSelect">Gemini Model:</label>
-        <select id="modelSelect">
-            <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
-            <option value="gemini-3-pro-preview">Gemini 3 Pro Preview</option>
-        </select>
-    </div>
+    <div class="layout-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>SiteVouch</h2>
+            </div>
+            <nav class="sidebar-nav">
+                <label for="tab-config" class="nav-item">
+                    <span class="icon">⚙️</span>
+                    Configuration
+                </label>
+                <label for="tab-sources" class="nav-item">
+                    <span class="icon">🛡️</span>
+                    Reputation Sources
+                </label>
+            </nav>
+        </aside>
 
-    <h1>Reputation Sources (Trusted Domains)</h1>
-    <div class="input-group">
-        <input type="text" id="new-source" placeholder="Enter domain (e.g., example.com)">
-        <button id="add-btn">Add</button>
+        <main class="content-area">
+            <!-- Configuration Section -->
+            <section id="section-config" class="tab-content">
+                <h1>Configuration</h1>
+                <div class="option-group">
+                    <label for="apiKey">Gemini API Key:</label>
+                    <input type="password" id="apiKey" placeholder="Enter API Key">
+                    <p class="help-text">Your API key is stored locally and used to query the Gemini model.</p>
+                </div>
+
+                <div class="option-group">
+                    <label for="modelSelect">Gemini Model:</label>
+                    <div class="select-wrapper">
+                        <select id="modelSelect">
+                            <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
+                            <option value="gemini-3-pro-preview">Gemini 3 Pro Preview</option>
+                        </select>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Reputation Sources Section -->
+            <section id="section-sources" class="tab-content">
+                <h1>Reputation Sources</h1>
+                <p class="description">Manage the list of trusted domains used for reputation verification.</p>
+
+                <div class="input-group">
+                    <input type="text" id="new-source" placeholder="Enter domain (e.g., example.com)">
+                    <button id="add-btn">Add Domain</button>
+                </div>
+
+                <div class="list-container">
+                    <ul id="sources-list"></ul>
+                </div>
+            </section>
+        </main>
     </div>
-    <ul id="sources-list"></ul>
     <script src="options.js"></script>
 </body>
 
