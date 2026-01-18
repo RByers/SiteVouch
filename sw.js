@@ -263,25 +263,20 @@ function calculateRating(reviews) {
 // ---------------------------------------------------------
 
 async function handleNavigation(tabId, url) {
+    // Always clear badge first to avoid stale state
+    await chrome.action.setBadgeText({ text: "", tabId }).catch(() => { });
+
     if (!url || !url.startsWith('http')) {
-        // Clear badge for non-http pages
-        await chrome.action.setBadgeText({ text: "", tabId }).catch(() => { });
         return;
     }
 
     try {
         const hostname = new URL(url).hostname;
-
         const cached = await getFromCache(hostname);
 
         if (cached) {
             await updateBadgeForRating(tabId, cached.reviews);
             if (!cached.isStale) return;
-        } else {
-            // Clear/reset badge while loading? Or keep empty? 
-            // "Unknown" state effectively means no badge or maybe "?" 
-            // User requested "clear the badge" if no results.
-            await chrome.action.setBadgeText({ text: "", tabId }).catch(() => { });
         }
 
         addToQueue(hostname, false, tabId);
