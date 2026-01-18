@@ -1,8 +1,8 @@
 const input = document.getElementById('new-source');
 const addBtn = document.getElementById('add-btn');
 const list = document.getElementById('sources-list');
-const apiKeyInput = document.getElementById('api-key');
-const saveKeyBtn = document.getElementById('save-key-btn');
+const apiKeyInput = document.getElementById('apiKey');
+const modelSelect = document.getElementById('modelSelect');
 
 function renderList(sources) {
     list.innerHTML = '';
@@ -21,21 +21,30 @@ function renderList(sources) {
 }
 
 function loadSettings() {
-    chrome.storage.sync.get(['sources', 'geminiApiKey'], (data) => {
+    chrome.storage.sync.get(['sources', 'geminiApiKey', 'preferredModel'], (data) => {
         const sources = data.sources || [];
         renderList(sources);
         if (data.geminiApiKey) {
             apiKeyInput.value = data.geminiApiKey;
         }
+        if (data.preferredModel) {
+            modelSelect.value = data.preferredModel;
+        } else {
+            modelSelect.value = "gemini3-flash-preview"; // Default
+        }
     });
 }
 
-function saveApiKey() {
+// Auto-save handlers
+apiKeyInput.addEventListener('input', () => {
     const key = apiKeyInput.value.trim();
-    chrome.storage.sync.set({ geminiApiKey: key }, () => {
-        alert('API Key saved!');
-    });
-}
+    chrome.storage.sync.set({ geminiApiKey: key });
+});
+
+modelSelect.addEventListener('change', () => {
+    const model = modelSelect.value;
+    chrome.storage.sync.set({ preferredModel: model });
+});
 
 function addSource() {
     const newSource = input.value.trim();
@@ -65,7 +74,6 @@ function removeSource(index) {
 
 document.addEventListener('DOMContentLoaded', loadSettings);
 addBtn.addEventListener('click', addSource);
-saveKeyBtn.addEventListener('click', saveApiKey);
 input.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') addSource();
 });

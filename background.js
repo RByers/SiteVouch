@@ -52,6 +52,17 @@ async function getFromCache(hostname) {
 
     if (!entry) return null;
 
+    // Check model version match
+    const { preferredModel } = await chrome.storage.sync.get(['preferredModel']);
+    const currentModel = preferredModel || 'gemini3-flash-preview';
+
+    if (entry.model !== currentModel) {
+        // Model mismatch - treat as stale/invalid (or just return null to force re-fetch)
+        // User said: "consider a cache to be stale whenever the model name doesn't match"
+        // Returning null basically forces a re-queue.
+        return null;
+    }
+
     const age = Date.now() - entry.timestamp;
     if (age > CACHE_EXPIRE_MS) {
         chrome.storage.local.remove(key); // Expired
@@ -63,12 +74,13 @@ async function getFromCache(hostname) {
     return entry;
 }
 
-async function saveToCache(hostname, reviews) {
+async function saveToCache(hostname, reviews, model) {
     const key = `cache_${hostname}`;
     const entry = {
         hostname: hostname,
         timestamp: Date.now(),
-        reviews: reviews
+        reviews: reviews,
+        model: model
     };
     await chrome.storage.local.set({ [key]: entry });
     return entry;
@@ -160,7 +172,7 @@ async function processQueue() {
 // ---------------------------------------------------------
 
 async function performGeminiQuery(hostname) {
-    const { geminiApiKey, sources } = await chrome.storage.sync.get(['geminiApiKey', 'sources']);
+    const { geminiApiKey, sources, preferredModel } = await chrome.storage.sync.get(['geminiApiKey', 'sources', 'preferredModel']);
 
     if (!geminiApiKey || !sources || sources.length === 0) {
         return;
@@ -175,7 +187,7 @@ async function performGeminiQuery(hostname) {
     - "rating": A number (0-5) representing the star rating.
     - "summary": A very brief summary (max 3 bullet points of 6 words each).`;
 
-    const model = 'gemini-3-flash-preview';
+    const model = preferredModel || 'gemini3-flash-preview';
 
     try {
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`, {
@@ -196,7 +208,7 @@ async function performGeminiQuery(hostname) {
         const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
         const jsonResult = JSON.parse(text);
 
-        await saveToCache(hostname, jsonResult.reviews || []);
+        await saveToCache(hostname, jsonResult.reviews || [], model);
 
     } catch (e) {
         console.error("Gemini API Failed", e);
