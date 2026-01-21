@@ -15,6 +15,10 @@ function calculateRating(reviews) {
 
 // Helper: Determine badge from avg rating
 async function updateBadgeForRating(tabId, reviews) {
+    if (!tabId) {
+        console.error("updateBadgeForRating called without tabId");
+        return;
+    }
     if (!reviews || reviews.length === 0) {
         // Clear badge if no data
         await chrome.action.setBadgeText({ text: "", tabId }).catch(() => { });
@@ -342,7 +346,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     if (request.type === 'REFRESH') {
         const hostname = request.hostname;
-        addToQueue(hostname, true);
+        addToQueue(hostname, true, request.tabId);
         sendResponse({ joined: true });
     }
 });

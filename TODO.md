@@ -1,4 +1,3 @@
-- There's a bug where the icon doesn't update when a refresh is forced. Propagate the tab ID and update logic to fail when an item doesn't have a tabid.
 - Update the popup view to use a lightgrey background on rows where the provided URL's hostname does not match the hostname from our reputation list
 - Add an option (off by default) to the trusted sources list to "Use other sources from Google Search". This causes the prompt to change to indicate that additional sources should be included where relevant. 
 - Include the trusted site set in the cache object and consider it stale when it doesn't match the current trusted site set.

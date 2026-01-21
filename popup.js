@@ -152,7 +152,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         resultDiv.textContent = "Refreshing...";
 
-        chrome.runtime.sendMessage({ type: 'REFRESH', hostname: currentHostname }, (response) => {
+        chrome.runtime.sendMessage({ type: 'REFRESH', hostname: currentHostname, tabId: tab.id }, (response) => {
             if (chrome.runtime.lastError) {
                 resultDiv.textContent = "Error: " + chrome.runtime.lastError.message;
                 return;
