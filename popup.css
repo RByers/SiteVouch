@@ -100,3 +100,64 @@ th {
     margin-top: 15px;
     color: #555;
 }
+
+#sources-container {
+    margin-top: 15px;
+    border-top: 1px solid #ddd;
+    padding-top: 10px;
+}
+
+.sources-toggle {
+    cursor: pointer;
+    font-size: 12px;
+    color: #777;
+    display: flex;
+    align-items: center;
+    user-select: none;
+}
+
+.sources-toggle:hover {
+    color: #333;
+}
+
+.sources-toggle::before {
+    content: '▶';
+    display: inline-block;
+    margin-right: 5px;
+    font-size: 10px;
+    transition: transform 0.2s;
+}
+
+.sources-toggle.expanded::before {
+    transform: rotate(90deg);
+}
+
+.sources-list {
+    display: none;
+    margin-top: 8px;
+    padding-left: 15px;
+    font-size: 11px;
+}
+
+.sources-list.expanded {
+    display: block;
+}
+
+.sources-list ul {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+
+.sources-list li {
+    margin-bottom: 4px;
+}
+
+.sources-list a {
+    color: #2196F3;
+    text-decoration: none;
+}
+
+.sources-list a:hover {
+    text-decoration: underline;
+}

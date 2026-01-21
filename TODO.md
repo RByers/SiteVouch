@@ -1,4 +1,5 @@
 - Update the popup view to use a lightgrey background on rows where the provided URL's hostname does not match the hostname from our reputation list
 - Add an option (off by default) to the trusted sources list to "Use other sources from Google Search". This causes the prompt to change to indicate that additional sources should be included where relevant. 
 - Include the trusted site set in the cache object and consider it stale when it doesn't match the current trusted site set.
-- Parse the grounding metadata and add a collapsed "sources" element to the very bottom of the popup. When this is expanded including links for each of the google searches used in the grounding, as well as all of the search result pages. Use the link's title as the link text.
+- There's a bug where when the refresh button is pressed, the popup flashes as if the content was erased and then added back (perhaps from the cache?). Remove the code that adds "refreshing".
+- Instead of prompting for a single review from all sources, structure the prompt and cache to do one gemini query per source. Even with the pro model, results don't seem to be grounded well in the requested trusted sources set.

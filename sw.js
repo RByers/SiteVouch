@@ -79,13 +79,14 @@ async function getFromCache(hostname) {
     return entry;
 }
 
-async function saveToCache(hostname, reviews, model) {
+async function saveToCache(hostname, reviews, model, groundingMetadata) {
     const key = `cache_${hostname}`;
     const entry = {
         hostname: hostname,
         timestamp: Date.now(),
         reviews: reviews,
-        model: model
+        model: model,
+        groundingMetadata: groundingMetadata
     };
     await chrome.storage.local.set({ [key]: entry });
     return entry;
@@ -187,19 +188,23 @@ async function performGeminiQuery(hostname) {
     }
 
     const prompt = `
-    You are a websitesite reputation analyzer.
+    You are a site reputation analyzer.
     Target Hostname: "${hostname}"
+    Trusted Sources: ${sources.join(', ')}
 
-    Step 1: Search for reviews of "${hostname}" on sources: ${sources.join(', ')}.
-    Step 2: For each result, verify if it is a review page for the SPECIFIC target hostname.
-    Step 3: Extract the rating and summary.
-  
+    Goal: Find valid reputation signals strictly from the trusted sources.
+
+    Step 1: execute Google Search queries to find reviews.
+    **CRITICAL: You must construct your search queries using the "site:" operator.** 
+     - Example: "site:reddit.com ${hostname} reviews"    
+    Step 2: For each result, verify it is a review page for the SPECIFIC target hostname.
+    Step 3: Extract the rating (or estimate sentiment 0-5) and summary.
+
     Rules:
-    - If a source has no numeric rating, estimate a sentiment score (0-5).
-    - Only include entries for provided sources where valid reputation signals are found.
-    - Do NOT invent URLs, provide only exactly URLs from search results. If a search result does not explicitly contain a review link, omit the entry.
-    - Return at most ${limitBullets} points in the summary, max ${limitWords} words each.`;
-
+    - Do NOT search the broad web. Only use the sources listed.
+    - Do NOT invent URLs. Use the exact "source_title" anchor to locate the link.
+    - Return at most ${limitBullets} bullet points per summary (${limitWords} words max).
+    `;
     const model = preferredModel || 'gemini-3-flash-preview';
 
     const responseSchema = {
@@ -249,7 +254,7 @@ async function performGeminiQuery(hostname) {
         const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
         const jsonResult = JSON.parse(text);
 
-        await saveToCache(hostname, jsonResult.reviews || [], model);
+        await saveToCache(hostname, jsonResult.reviews || [], model, result.candidates?.[0]?.groundingMetadata);
 
     } catch (e) {
         console.error("Gemini API Failed", e);
