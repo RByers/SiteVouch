@@ -1,3 +1,5 @@
-- Add options for configuring the detail in the popup view. Use input type=number controls allowing the user to increase / decrease the maximum number of bullets and max words per bullet (default to 3 bullets and 6 words per bullet).
+- There's a bug where the icon doesn't update when a refresh is forced. Propagate the tab ID and update logic to fail when an item doesn't have a tabid.
 - Update the popup view to use a lightgrey background on rows where the provided URL's hostname does not match the hostname from our reputation list
 - Add an option (off by default) to the trusted sources list to "Use other sources from Google Search". This causes the prompt to change to indicate that additional sources should be included where relevant. 
+- Include the trusted site set in the cache object and consider it stale when it doesn't match the current trusted site set.
+- Parse the grounding metadata and add a collapsed "sources" element to the very bottom of the popup. When this is expanded including links for each of the google searches used in the grounding, as well as all of the search result pages. Use the link's title as the link text.

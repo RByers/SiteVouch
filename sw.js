@@ -22,7 +22,7 @@ async function updateBadgeForRating(tabId, reviews) {
     }
 
     const rating = calculateRating(reviews);
-    let text = "👉";
+    let text = "∓";
     let color = "#FFEE58"; // Yellow-ish
 
     if (rating >= 4) {
@@ -34,6 +34,7 @@ async function updateBadgeForRating(tabId, reviews) {
     }
 
     try {
+        await chrome.action.setBadgeTextColor({ color: "#000000", tabId });
         await chrome.action.setBadgeText({ text: text, tabId });
         await chrome.action.setBadgeBackgroundColor({ color: color, tabId });
     } catch (e) {
