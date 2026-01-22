@@ -195,7 +195,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             allTasks = allTasks.concat(status.queue);
         }
 
-        if (allTasks.length > 0) {
+        if (status.lastError) {
+            queueDiv.innerHTML = `<span style="color: #d32f2f;">Error: ${status.lastError}</span>`;
+            // If we have tasks, append them
+            if (allTasks.length > 0) {
+                const hostnames = allTasks.map(t => t.hostname).join(', ');
+                queueDiv.innerHTML += `<br>Processing: ${hostnames}`;
+            }
+        } else if (allTasks.length > 0) {
             const hostnames = allTasks.map(t => t.hostname).join(', ');
             queueDiv.textContent = `Processing: ${hostnames}`;
         } else {

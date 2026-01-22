@@ -5,7 +5,9 @@ const CACHE_EXPIRE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // In-memory queue
 let queryQueue = [];
+
 let currentTask = null; // The task currently being processed
+let lastError = null; // Store the last error that occurred during processing
 
 function calculateRating(reviews) {
     if (!reviews || reviews.length === 0) return null;
@@ -162,10 +164,13 @@ async function processQueue() {
         const freshData = await getFromCache(currentTask.hostname);
         if (freshData) {
             await updateBadgeForRating(currentTask.tabId, freshData.reviews);
+            // Success - ensure error is clear
+            lastError = null;
         }
 
     } catch (error) {
         console.error("Queue Processing Error:", error);
+        lastError = error.message;
     } finally {
         currentTask = null;
         processQueue();
@@ -258,6 +263,7 @@ async function performGeminiQuery(hostname) {
 
     } catch (e) {
         console.error("Gemini API Failed", e);
+        throw e; // Re-throw to be caught by processQueue
     }
 }
 
@@ -324,7 +330,8 @@ function broadcastStatus() {
     chrome.runtime.sendMessage({
         type: 'STATUS_UPDATE',
         queue: queryQueue,
-        currentTask: currentTask
+        currentTask: currentTask,
+        lastError: lastError
     }, () => {
         if (chrome.runtime.lastError) {
             // Safe to ignore
@@ -337,7 +344,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         (async () => {
             const qStatus = {
                 queue: queryQueue,
-                currentTask: currentTask
+                currentTask: currentTask,
+                lastError: lastError
             };
 
             if (request.hostname) {
