@@ -6,6 +6,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     const queueDiv = document.getElementById('queue-status');
     const sourcesDiv = document.getElementById('sources-container');
 
+    const settingsBtn = document.getElementById('settings-btn');
+    if (settingsBtn) {
+        settingsBtn.addEventListener('click', () => {
+            if (chrome.runtime.openOptionsPage) {
+                chrome.runtime.openOptionsPage();
+            } else {
+                window.open(chrome.runtime.getURL('options.html'));
+            }
+        });
+    }
+
     let currentHostname = "";
 
     if (tab && tab.url) {
@@ -20,6 +31,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         hostSpan.textContent = "No URL";
         refreshBtn.disabled = true;
         refreshBtn.classList.add('disabled'); // Ensure style updates if needed
+    }
+
+    // Check configuration
+    const { geminiApiKey, sources } = await chrome.storage.sync.get(['geminiApiKey', 'sources']);
+
+    if (!geminiApiKey) {
+        resultDiv.innerHTML = "API key required.<br>Please configure it in the extension settings.";
+        resultDiv.style.color = "#d32f2f"; // Error color
+        refreshBtn.disabled = true;
+        refreshBtn.classList.add('disabled');
+        return; // Stop further initialization
+    }
+
+    if (!sources || sources.length === 0) {
+        resultDiv.innerHTML = "No reputation sources configured.<br>Please add sources in the extension settings.";
+        resultDiv.style.color = "#d32f2f"; // Error color
+        refreshBtn.disabled = true;
+        refreshBtn.classList.add('disabled');
+        return; // Stop further initialization
     }
 
     // -------------------------------------------------------------
@@ -223,15 +253,5 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
-    // Settings handler
-    const settingsBtn = document.getElementById('settings-btn');
-    if (settingsBtn) {
-        settingsBtn.addEventListener('click', () => {
-            if (chrome.runtime.openOptionsPage) {
-                chrome.runtime.openOptionsPage();
-            } else {
-                window.open(chrome.runtime.getURL('options.html'));
-            }
-        });
-    }
+
 });
