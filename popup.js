@@ -212,8 +212,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (status.currentResult) {
             renderResult(status.currentResult.reviews);
             renderSources(status.currentResult.groundingMetadata);
-        } else {
+
             renderSources(null); // Clear sources if no result
+        }
+
+        // Check if current hostname is being processed
+        const isProcessingCurrent = allTasks.some(t => t.hostname === currentHostname);
+        if (isProcessingCurrent) {
+            refreshBtn.classList.add('spinning');
+            refreshBtn.disabled = true;
+        } else {
+            refreshBtn.classList.remove('spinning');
+            refreshBtn.disabled = false;
         }
     }
 
@@ -250,8 +260,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     refreshBtn.addEventListener('click', () => {
         if (!currentHostname) return;
 
-        resultDiv.textContent = "Refreshing...";
-
+        // No UI clearing, just send request (animation handled by status update)
         chrome.runtime.sendMessage({ type: 'REFRESH', hostname: currentHostname, tabId: tab.id }, (response) => {
             if (chrome.runtime.lastError) {
                 resultDiv.textContent = "Error: " + chrome.runtime.lastError.message;
