@@ -182,6 +182,15 @@ async function processQueue() {
 // Gemini API Logic
 // ---------------------------------------------------------
 
+function sanitizeSource(source) {
+    if (!source) return null;
+    let s = source.toLowerCase();
+    s = s.replace(/^https?:\/\//, '');
+    s = s.replace(/^www\./, '');
+    s = s.replace(/\/$/, '');
+    return s;
+}
+
 async function performGeminiQuery(hostname) {
     const { geminiApiKey, sources, preferredModel, maxBullets, maxWords } = await chrome.storage.sync.get(['geminiApiKey', 'sources', 'preferredModel', 'maxBullets', 'maxWords']);
 
@@ -192,16 +201,22 @@ async function performGeminiQuery(hostname) {
         return;
     }
 
+    const cleanSources = sources.map(sanitizeSource).filter(s => s && s.length > 0);
+    if (cleanSources.length === 0) {
+        console.warn("No valid sources after sanitization");
+        return;
+    }
+
     const prompt = `
     You are a site reputation analyzer.
     Target Hostname: "${hostname}"
-    Trusted Sources: ${sources.join(', ')}
+    Trusted Sources: ${cleanSources.join(', ')}
 
     Goal: Find valid reputation signals strictly from the trusted sources.
 
-    Step 1: execute Google Search queries to find reviews.
+    Step 1: execute Google Search queries to find reviews on each of the following websites: ${cleanSources.join(', ')}
     **CRITICAL: You must construct your search queries using the "site:" operator.** 
-     - Example: "site:reddit.com ${hostname} reviews"    
+     - Example: "site:${cleanSources[0]} ${hostname} reviews"    
     Step 2: For each result, verify it is a review page for the SPECIFIC target hostname.
     Step 3: Extract the rating (or estimate sentiment 0-5) and summary.
 
@@ -238,6 +253,7 @@ async function performGeminiQuery(hostname) {
     };
 
     try {
+        console.log("Prompting Gemini:", prompt);
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -252,14 +268,18 @@ async function performGeminiQuery(hostname) {
         });
 
         if (!response.ok) {
-            throw new Error(`API Error: ${response.status}`);
+            const errorBody = await response.text();
+            console.error(`API Error (${response.status} ${response.statusText}) Body:`, errorBody);
+            throw new Error(`API Error: ${response.status} ${response.statusText}`);
         }
 
         const result = await response.json();
+
         const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
         const jsonResult = JSON.parse(text);
 
-        await saveToCache(hostname, jsonResult.reviews || [], model, result.candidates?.[0]?.groundingMetadata);
+        const metadata = result.candidates?.[0]?.groundingMetadata;
+        await saveToCache(hostname, jsonResult.reviews || [], model, metadata);
 
     } catch (e) {
         console.error("Gemini API Failed", e);

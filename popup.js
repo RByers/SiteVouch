@@ -212,7 +212,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (status.currentResult) {
             renderResult(status.currentResult.reviews);
             renderSources(status.currentResult.groundingMetadata);
-
+        } else {
             renderSources(null); // Clear sources if no result
         }
 
