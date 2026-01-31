@@ -83,64 +83,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return starsHtml;
     }
 
-    function renderSources(groundingMetadata) {
-        if (!groundingMetadata) {
-            sourcesDiv.innerHTML = '';
-            sourcesDiv.style.display = 'none';
-            return;
-        }
 
-        console.log("Grounding Metadata:", groundingMetadata);
-        sourcesDiv.style.display = 'block';
-
-        const queries = groundingMetadata.webSearchQueries || [];
-        const chunks = groundingMetadata.groundingChunks || [];
-
-        let listItems = '';
-
-        // Flash/Pro models might have different structures, but typically:
-        // chunks[].web.uri / title
-
-        const seenUrls = new Set();
-
-        // 1. Add Search Queries
-        queries.forEach(query => {
-            const url = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
-            listItems += `<li><a href="${url}" target="_blank">🔍 Search: ${query}</a></li>`;
-        });
-
-        // 2. Add specific Web Sources
-        chunks.forEach(chunk => {
-            if (chunk.web && chunk.web.uri && chunk.web.title) {
-                if (!seenUrls.has(chunk.web.uri)) {
-                    seenUrls.add(chunk.web.uri);
-                    listItems += `<li><a href="${chunk.web.uri}" target="_blank">🔗 ${chunk.web.title}</a></li>`;
-                }
-            }
-        });
-
-        if (!listItems) {
-            sourcesDiv.innerHTML = '';
-            sourcesDiv.style.display = 'none';
-            return;
-        }
-
-        const html = `
-            <div class="sources-toggle">Sources (${queries.length + seenUrls.size})</div>
-            <div class="sources-list">
-                <ul>${listItems}</ul>
-            </div>
-        `;
-        sourcesDiv.innerHTML = html;
-
-        const toggle = sourcesDiv.querySelector('.sources-toggle');
-        const list = sourcesDiv.querySelector('.sources-list');
-
-        toggle.addEventListener('click', () => {
-            const isExpanded = toggle.classList.toggle('expanded');
-            list.classList.toggle('expanded');
-        });
-    }
 
     function renderResult(reviews) {
         if (!reviews || reviews.length === 0) {
@@ -160,15 +103,34 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <tbody>
         `;
 
-        reviews.forEach(review => {
+        reviews.forEach((review, index) => {
             const summaryList = Array.isArray(review.summary) ? review.summary.map(s => `<li>${s}</li>`).join('') : review.summary;
             const ratingHtml = getStarRatingHtml(review.rating || 0);
+            const rowId = `review-row-${index}`;
+            const detailsId = `review-details-${index}`;
 
             tableHtml += `
-                <tr>
-                    <td><a class="source-link" data-url="${review.url}">${review.source}</a></td>
+                <tr id="${rowId}">
+                    <td>
+                        <div class="source-cell">
+                            <a class="source-link" data-url="${review.url}">${review.source}</a>
+                            <div class="source-icon-wrapper" data-target="${detailsId}" title="Show Sources">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="source-icon">
+                                    <circle cx="11" cy="11" r="8"></circle>
+                                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                </svg>
+                            </div>
+                        </div>
+                    </td>
                     <td>${ratingHtml}</td>
                     <td><ul>${summaryList}</ul></td>
+                </tr>
+                <tr id="${detailsId}" class="source-details-row" style="display: none;">
+                    <td colspan="3">
+                        <div class="source-details-content">
+                           ${generateSourcesHtml(review.groundingMetadata)}
+                        </div>
+                    </td>
                 </tr>
             `;
         });
@@ -176,6 +138,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         tableHtml += `</tbody></table>`;
         resultDiv.innerHTML = tableHtml;
 
+        // Event listeners for links
         document.querySelectorAll('.source-link').forEach(link => {
             link.addEventListener('click', (e) => {
                 const url = e.target.getAttribute('data-url');
@@ -184,6 +147,44 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             });
         });
+
+        // Event listeners for source toggles
+        document.querySelectorAll('.source-icon-wrapper').forEach(icon => {
+            icon.addEventListener('click', (e) => {
+                const targetId = e.currentTarget.getAttribute('data-target');
+                const detailsRow = document.getElementById(targetId);
+                if (detailsRow) {
+                    const isHidden = detailsRow.style.display === 'none';
+                    detailsRow.style.display = isHidden ? 'table-row' : 'none';
+                }
+            });
+        });
+    }
+
+    function generateSourcesHtml(groundingMetadata) {
+        if (!groundingMetadata) return '<div class="no-sources">No source metadata available</div>';
+
+        const queries = groundingMetadata.webSearchQueries || [];
+        const chunks = groundingMetadata.groundingChunks || [];
+        const seenUrls = new Set();
+        let listItems = '';
+
+        queries.forEach(query => {
+            const url = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+            listItems += `<li><a href="${url}" target="_blank">🔍 Search: ${query}</a></li>`;
+        });
+
+        chunks.forEach(chunk => {
+            if (chunk.web && chunk.web.uri && chunk.web.title) {
+                if (!seenUrls.has(chunk.web.uri)) {
+                    seenUrls.add(chunk.web.uri);
+                    listItems += `<li><a href="${chunk.web.uri}" target="_blank">🔗 ${chunk.web.title}</a></li>`;
+                }
+            }
+        });
+
+        if (!listItems) return '<div class="no-sources">No sources found</div>';
+        return `<ul class="source-details-list">${listItems}</ul>`;
     }
 
     function renderStatus(status) {
@@ -211,9 +212,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (status.currentResult) {
             renderResult(status.currentResult.reviews);
-            renderSources(status.currentResult.groundingMetadata);
-        } else {
-            renderSources(null); // Clear sources if no result
         }
 
         // Check if current hostname is being processed

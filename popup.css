@@ -177,3 +177,47 @@ th {
     opacity: 0.7;
     pointer-events: none;
 }
+
+.source-cell {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.source-icon-wrapper {
+    cursor: pointer;
+    opacity: 0.6;
+    margin-left: 5px;
+    padding: 2px;
+}
+
+.source-icon-wrapper:hover {
+    opacity: 1;
+    color: #4CAF50;
+    background-color: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+}
+
+.source-details-row {
+    background-color: #f9f9f9;
+    font-size: 0.85em;
+}
+
+.source-details-content {
+    padding: 10px;
+}
+
+.source-details-list {
+    margin: 0;
+    padding-left: 20px;
+    list-style-type: none;
+}
+
+.source-details-list li {
+    margin-bottom: 4px;
+}
+
+.no-sources {
+    font-style: italic;
+    color: #888;
+}
