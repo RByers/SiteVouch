@@ -207,45 +207,36 @@ async function performGeminiQuery(hostname) {
         return;
     }
 
+    const prompt = `
+    You are a site reputation analyzer.
+    Target Hostname: "${hostname}"
+    Trusted Sources: ${cleanSources.join(', ')}
+
+    Goal: Find valid reputation signals strictly from the trusted sources.
+
+    Step 1: execute Google Search queries to find reviews on each of the following websites: ${cleanSources.join(', ')}
+    **CRITICAL: You must construct your search queries using the "site:" operator.** 
+     - Example: "site:${cleanSources[0]} ${hostname} reviews"    
+    Step 2: For each result, verify it is a review page for the SPECIFIC target hostname.
+    Step 3: Extract the rating (or estimate sentiment 0-5) and summary.
+
+    Rules:
+    - Do NOT search the broad web. Only use the sources listed.
+    - Do NOT invent URLs. Use the exact "source_title" anchor to locate the link.
+    - Return at most ${limitBullets} bullet points per summary (${limitWords} words max).
+    `;
     const model = preferredModel || 'gemini-3-flash-preview';
 
-    // Initialize cache entry with empty reviews if it doesn't exist
-    // We want to clear any *old* complete result when we start a fresh "force refresh" or new query
-    // But since `performGeminiQuery` is called when data is missing or stale, we can just start fresh.
-    let currentReviews = [];
-
-    // Check if we already have partial results to preserve (unlikely for a full refresh, but good practice?)
-    // Actually, for a fresh run, we should reset.
-    await saveToCache(hostname, [], model, null); // Clear previous data to start fresh
-
-    for (const source of cleanSources) {
-        console.log(`Querying source: ${source}`);
-
-        const prompt = `
-        You are a site reputation analyzer.
-        Target Hostname: "${hostname}"
-        Target Source: "${source}"
-
-        Goal: Find valid reputation signals strictly from the specific Target Source.
-
-        Step 1: Execute this exact Google Search query: "site:${source} ${hostname} reviews"
-        Step 2: From the search results, verify if there is a review page for the SPECIFIC target hostname on ${source}.
-        Step 3: If found, extract the rating (or estimate sentiment 0-5) and summary. If NOT found, return null.
-
-        Rules:
-        - Do NOT search the broad web. Only use the search result from "site:${source}".
-        - Return at most ${limitBullets} bullet points per summary (${limitWords} words max).
-        `;
-
-        const responseSchema = {
-            "type": "OBJECT",
-            "properties": {
-                "found": { "type": "BOOLEAN", "description": "True if a relevant review page was found on the source" },
-                "review": {
+    const responseSchema = {
+        "type": "OBJECT",
+        "properties": {
+            "reviews": {
+                "type": "ARRAY",
+                "description": "List of reputation reviews from trusted sources",
+                "items": {
                     "type": "OBJECT",
-                    "description": "The review data if found",
                     "properties": {
-                        "source": { "type": "STRING", "description": `Must be exactly "${source}"` },
+                        "source": { "type": "STRING", "description": "Name of the review source (e.g. Trustpilot)" },
                         "url": { "type": "STRING", "description": "Direct URL to the review page" },
                         "rating": { "type": "NUMBER", "description": "Star rating from 0 to 5" },
                         "summary": {
@@ -256,59 +247,43 @@ async function performGeminiQuery(hostname) {
                     },
                     "required": ["source", "url", "rating", "summary"]
                 }
-            },
-            "required": ["found"]
-        };
-
-        console.log("Prompt:", prompt);
-
-        try {
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: {
-                        responseMimeType: "application/json",
-                        responseSchema: responseSchema
-                    },
-                    tools: [{ google_search: {} }]
-                })
-            });
-
-            if (!response.ok) {
-                console.error(`API Error for ${source}:`, response.statusText);
-                continue; // Skip this source on error
             }
+        },
+        "required": ["reviews"]
+    };
 
-            const result = await response.json();
-            const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-            const jsonResult = JSON.parse(text);
-            const metadata = result.candidates?.[0]?.groundingMetadata;
+    try {
+        console.log("Prompting Gemini:", prompt);
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: responseSchema
+                },
+                tools: [{ google_search: {} }]
+            })
+        });
 
-            if (jsonResult.found && jsonResult.review) {
-                // Attach metadata to the review object itself for per-row display
-                const reviewWithMeta = {
-                    ...jsonResult.review,
-                    groundingMetadata: metadata,
-                    source: source // Ensure source name is consistent
-                };
-
-                // Add to our running list
-                currentReviews.push(reviewWithMeta);
-
-                // Update Cache immediately
-                // Note: We are passing 'null' for global metadata because we store it per-review now.
-                await saveToCache(hostname, currentReviews, model, null);
-
-                // Notify Popup
-                broadcastStatus();
-            }
-
-        } catch (e) {
-            console.error(`Failed to query source ${source}`, e);
-            // Continue to next source
+        if (!response.ok) {
+            const errorBody = await response.text();
+            console.error(`API Error (${response.status} ${response.statusText}) Body:`, errorBody);
+            throw new Error(`API Error: ${response.status} ${response.statusText}`);
         }
+
+        const result = await response.json();
+
+        const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+        const jsonResult = JSON.parse(text);
+
+        const metadata = result.candidates?.[0]?.groundingMetadata;
+        await saveToCache(hostname, jsonResult.reviews || [], model, metadata);
+
+    } catch (e) {
+        console.error("Gemini API Failed", e);
+        throw e; // Re-throw to be caught by processQueue
     }
 }
 
