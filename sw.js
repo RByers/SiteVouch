@@ -173,14 +173,16 @@ function addToQueue(hostname, forceRefresh = false, tabId = null) {
     }
 
     queryQueue.push({ hostname, forceRefresh, tabId });
-    processQueue();
+    if (!currentTask) processQueue();
     broadcastStatus(); // Notify popup
 }
 
 async function processQueue() {
-    if (currentTask || queryQueue.length === 0) return;
+    if (!currentTask && queryQueue.length === 0) return;
 
-    currentTask = queryQueue.shift();
+    if (!currentTask) {
+        currentTask = queryQueue.shift();
+    }
     broadcastStatus();
 
     try {
