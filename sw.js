@@ -366,8 +366,22 @@ async function performGeminiQuery(hostname) {
                 state: 'auto',
                 visits: 0
             });
+
+            // Check if this new source is "active" (i.e. not buried by maxProviders)
+            // We use the updated 'migrated' list to check.
+            const activeDomains = getActiveSources(migrated, limitProviders).map(sanitizeSource);
+            const isActive = activeDomains.includes(sanitizeSource(hostname));
+
             // Update storage - strict mode, async
-            await chrome.storage.sync.set({ sources: migrated, lastSettingsChange: Date.now() });
+            // Update timestamp only if this source actually changes the active query set
+            const updates = { sources: migrated };
+            if (isActive) {
+                console.log(`New source ${hostname} is ACTIVE. Updating settings timestamp.`);
+                updates.lastSettingsChange = Date.now();
+            } else {
+                console.log(`New source ${hostname} is INACTIVE (limit ${limitProviders}). Skipping timestamp update.`);
+            }
+            await chrome.storage.sync.set(updates);
 
             // Note: We don't need to re-query immediately, 
         }
