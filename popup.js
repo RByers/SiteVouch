@@ -98,7 +98,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const target = currentSources.find(s => s.domain === matchedSource.domain);
                 if (target) {
                     target.state = newState;
-                    await chrome.storage.sync.set({ sources: currentSources });
+                    await chrome.storage.sync.set({ sources: currentSources, lastSettingsChange: Date.now() });
                 }
             };
         }

@@ -129,6 +129,9 @@ function initializeSettings() {
         currentMaxProviders = data.maxProviders || 20;
         maxProvidersInput.value = currentMaxProviders;
 
+        // Default to true if undefined
+        autoAddSourcesCheck.checked = (data.autoAddSources !== false);
+
         // Initial Sort
         displayedSources = sortSources([...sources]);
         renderList();
@@ -137,22 +140,27 @@ function initializeSettings() {
 
 // Auto-save handlers
 apiKeyInput.addEventListener('input', () => chrome.storage.sync.set({ geminiApiKey: apiKeyInput.value.trim() }));
-modelSelect.addEventListener('change', () => chrome.storage.sync.set({ preferredModel: modelSelect.value }));
+modelSelect.addEventListener('change', () => chrome.storage.sync.set({ preferredModel: modelSelect.value, lastSettingsChange: Date.now() }));
 maxBulletsInput.addEventListener('change', () => {
     const val = parseInt(maxBulletsInput.value, 10);
-    if (val > 0) chrome.storage.sync.set({ maxBullets: val });
+    if (val > 0) chrome.storage.sync.set({ maxBullets: val, lastSettingsChange: Date.now() });
 });
 maxWordsInput.addEventListener('change', () => {
     const val = parseInt(maxWordsInput.value, 10);
-    if (val > 0) chrome.storage.sync.set({ maxWords: val });
+    if (val > 0) chrome.storage.sync.set({ maxWords: val, lastSettingsChange: Date.now() });
 });
 maxProvidersInput.addEventListener('change', () => {
     const val = parseInt(maxProvidersInput.value, 10);
     if (val > 0) {
         currentMaxProviders = val;
-        chrome.storage.sync.set({ maxProviders: val });
+        chrome.storage.sync.set({ maxProviders: val, lastSettingsChange: Date.now() });
         renderList(); // Re-render to update greyed out status, but preserve order
     }
+});
+
+const autoAddSourcesCheck = document.getElementById('autoAddSources');
+autoAddSourcesCheck.addEventListener('change', () => {
+    chrome.storage.sync.set({ autoAddSources: autoAddSourcesCheck.checked });
 });
 
 
@@ -172,7 +180,7 @@ function addSource() {
             sources.push(newSource);
 
             // Update storage
-            chrome.storage.sync.set({ sources }, () => {
+            chrome.storage.sync.set({ sources, lastSettingsChange: Date.now() }, () => {
                 input.value = '';
                 // Add to display list (unshift to top so user sees it)
                 displayedSources.unshift(newSource);
@@ -196,7 +204,7 @@ function updateSourceState(domain, newState) {
         const storeItem = sources.find(s => s.domain === domain);
         if (storeItem) {
             storeItem.state = newState;
-            chrome.storage.sync.set({ sources });
+            chrome.storage.sync.set({ sources, lastSettingsChange: Date.now() });
         }
     });
 }
@@ -210,7 +218,7 @@ function removeSource(domain) {
     chrome.storage.sync.get(['sources'], (data) => {
         let sources = migrateSources(data.sources);
         sources = sources.filter(s => s.domain !== domain);
-        chrome.storage.sync.set({ sources });
+        chrome.storage.sync.set({ sources, lastSettingsChange: Date.now() });
     });
 }
 

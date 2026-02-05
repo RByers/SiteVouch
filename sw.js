@@ -102,13 +102,9 @@ async function getFromCache(hostname) {
 
     if (!entry) return null;
 
-    // Check model version match
-    const { preferredModel } = await chrome.storage.sync.get(['preferredModel']);
-    const currentModel = preferredModel || 'gemini-3-flash-preview';
-
-    if (entry.model !== currentModel) {
-        return null;
-    }
+    // Check settings version match
+    const { lastSettingsChange } = await chrome.storage.sync.get(['lastSettingsChange']);
+    const globalSettingsTs = lastSettingsChange || 0;
 
     const age = Date.now() - entry.timestamp;
     if (age > CACHE_EXPIRE_MS) {
@@ -116,18 +112,23 @@ async function getFromCache(hostname) {
         return null;
     }
 
+    // Mark stale if settings have changed since this entry was created
+    // (Entry stores the settings timestamp it was created with)
+    const settingsStale = entry.settingsTimestamp && entry.settingsTimestamp < globalSettingsTs;
+
     // Return entry even if stale (callers can decide to refresh)
-    entry.isStale = age > CACHE_STALE_MS;
+    entry.isStale = (age > CACHE_STALE_MS) || settingsStale;
     return entry;
 }
 
-async function saveToCache(hostname, reviews, model, groundingMetadata) {
+async function saveToCache(hostname, reviews, settingsTimestamp, isSource, groundingMetadata) {
     const key = `cache_${hostname}`;
     const entry = {
         hostname: hostname,
         timestamp: Date.now(),
         reviews: reviews,
-        model: model,
+        settingsTimestamp: settingsTimestamp,
+        isSource: isSource,
         groundingMetadata: groundingMetadata
     };
     await chrome.storage.local.set({ [key]: entry });
@@ -242,12 +243,14 @@ function sanitizeSource(source) {
 }
 
 async function performGeminiQuery(hostname) {
-    const { geminiApiKey, sources, preferredModel, maxBullets, maxWords, maxProviders } =
-        await chrome.storage.sync.get(['geminiApiKey', 'sources', 'preferredModel', 'maxBullets', 'maxWords', 'maxProviders']);
+    const { geminiApiKey, sources, preferredModel, maxBullets, maxWords, maxProviders, autoAddSources, lastSettingsChange } =
+        await chrome.storage.sync.get(['geminiApiKey', 'sources', 'preferredModel', 'maxBullets', 'maxWords', 'maxProviders', 'autoAddSources', 'lastSettingsChange']);
 
     const limitBullets = maxBullets || 3;
     const limitWords = maxWords || 6;
     const limitProviders = maxProviders || 20;
+    const shouldAutoAdd = (autoAddSources !== false); // Default true
+    const currentSettingsTimestamp = lastSettingsChange || 0;
 
     if (!geminiApiKey || !sources || sources.length === 0) {
         return;
@@ -274,17 +277,20 @@ async function performGeminiQuery(hostname) {
      - Example: "site:${cleanSourceDomains[0]} ${hostname} reviews"    
     Step 2: For each result, verify it is a review page for the SPECIFIC target hostname.
     Step 3: Extract the rating (or estimate sentiment 0-5) and summary.
+    Step 4: Determine if "${hostname}" itself is a "Reputation Source" (a platform hosting reviews or discussions of a wide variety of websites).
 
     Rules:
     - Do NOT search the broad web. Only use the sources listed.
     - Do NOT invent URLs. Use the exact "source_title" anchor to locate the link.
     - Return at most ${limitBullets} bullet points per summary (${limitWords} words max).
+    - Set "isSource" to true ONLY if "${hostname}" is a generalized review site or forum.
     `;
     const model = preferredModel || 'gemini-3-flash-preview';
 
     const responseSchema = {
         "type": "OBJECT",
         "properties": {
+            "isSource": { "type": "BOOLEAN", "description": "True if the target website itself is a source of reputation (reviews/discussions) for others." },
             "reviews": {
                 "type": "ARRAY",
                 "description": "List of reputation reviews from trusted sources",
@@ -334,6 +340,26 @@ async function performGeminiQuery(hostname) {
 
         const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
         const jsonResult = JSON.parse(text);
+
+        // Auto-add logic
+        if (jsonResult.reputationSource && shouldAutoAdd) {
+            const migrated = migrateSources(sources);
+            // Check if exists
+            const exists = migrated.some(s => s.domain === hostname || hostname.endsWith('.' + s.domain));
+            if (!exists) {
+                console.log(`Auto-adding new reputation source: ${hostname}`);
+                migrated.push({
+                    domain: hostname,
+                    state: 'auto',
+                    visits: 0
+                });
+                // Update storage - strict mode, async
+                await chrome.storage.sync.set({ sources: migrated });
+
+                // Note: We don't need to re-query immediately, 
+                // but next time this source might be used if it's high priority.
+            }
+        }
 
         const metadata = result.candidates?.[0]?.groundingMetadata;
         await saveToCache(hostname, jsonResult.reviews || [], model, metadata);

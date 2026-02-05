@@ -29,9 +29,8 @@ SiteVouch is a Chrome extension for experimenting with [ideas](https://docs.goog
  - Clone this repo: `git clone https://github.com/RByers/SiteVouch.git`
  - Open `chrome://extensions/`, enable Developer Mode, and use "Load Unpacked Extension"
  - You should now see the SiteVouch icon in your extensions list. Right click on it and select "Options"
- - Add sites you rely on for reviews of other websites or businesses.
  - Get a [Gemini API key](https://aistudio.google.com/api-keys) and paste it here.
- - Start browsing and watch the extension icon.
+ - Start browsing and watch the extension icon. Manually consult some site reviews, and the extension should learn to search those sources automatically.
 
 ## FAQ
 
