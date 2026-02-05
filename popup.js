@@ -256,7 +256,40 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    // -------------------------------------------------------------
+    // Status / Countdown Logic
+    // -------------------------------------------------------------
+    let countdownInterval = null;
+
+    function startCountdown(targetTime) {
+        if (countdownInterval) clearInterval(countdownInterval);
+
+        const update = () => {
+            const now = Date.now();
+            const diff = Math.ceil((targetTime - now) / 1000);
+
+            if (diff <= 0) {
+                queueDiv.textContent = "Retrying now...";
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+                return;
+            }
+            queueDiv.textContent = `Server busy (503). Retrying in ${diff}s...`;
+        };
+
+        update(); // Run immediately
+        countdownInterval = setInterval(update, 1000);
+    }
+
     function renderStatus(status) {
+        // Clear any existing countdown if we are not in a waiting state
+        if (!status.currentTask || !status.currentTask.nextRetryTime) {
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+            }
+        }
+
         let allTasks = [];
         if (status.currentTask) {
             allTasks.push(status.currentTask);
@@ -265,7 +298,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             allTasks = allTasks.concat(status.queue);
         }
 
-        if (status.lastError) {
+        // Priority: Current Task Waiting -> Error -> Queue List
+        if (status.currentTask && status.currentTask.nextRetryTime && status.currentTask.nextRetryTime > Date.now()) {
+            startCountdown(status.currentTask.nextRetryTime);
+        } else if (status.lastError) {
             queueDiv.innerHTML = `<span style="color: #d32f2f;">Error: ${status.lastError}</span>`;
             // If we have tasks, append them
             if (allTasks.length > 0) {
@@ -287,7 +323,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         // Check if current hostname is being processed
+        // Modified to consider 'waiting' as processing
         const isProcessingCurrent = allTasks.some(t => t.hostname === currentHostname);
+
         if (isProcessingCurrent) {
             refreshBtn.classList.add('spinning');
             refreshBtn.disabled = true;
@@ -317,6 +355,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Listen for updates from background
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.type === 'STATUS_UPDATE') {
+            // We can optimize by using the broadcasted data directly instead of fetching again,
+            // but the original logic was to re-fetch to get 'currentResult' specifically for this hostname.
+            // The broadcast message sends: queue, currentTask, lastError. It DOES NOT send 'currentResult' (cache lookup).
+
+            // If we are just showing status (queue/retrying), the broadcast data is enough for the queueDiv update.
+            // BUT renderStatus expects 'currentResult' to guard renderResult call.
+
+            // Let's stick to the existing pattern: fetch status specific to this hostname
             if (currentHostname) {
                 chrome.runtime.sendMessage({ type: 'GET_STATUS', hostname: currentHostname }, (response) => {
                     if (chrome.runtime.lastError) return;

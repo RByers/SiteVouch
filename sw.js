@@ -204,8 +204,24 @@ async function processQueue() {
 
     } catch (error) {
         console.error("Queue Processing Error:", error);
+
+        if (error.status === 503) {
+            currentTask.retryAttempts = (currentTask.retryAttempts || 0);
+
+            // Exponential backoff: 0s, 5s, 10s, 20s... max 5m
+            const delay = currentTask.retryAttempts === 0 ? 0 : Math.min(5000 * Math.pow(2, currentTask.retryAttempts - 1), 300000);
+
+            console.log(`Gemini 503. Retrying in ${delay}ms (Attempt ${currentTask.retryAttempts + 1})`);
+
+            currentTask.nextRetryTime = Date.now() + delay;
+            currentTask.retryAttempts++;
+
+            broadcastStatus();
+            setTimeout(processQueue, delay);
+            return;
+        }
+
         lastError = error.message;
-    } finally {
         currentTask = null;
         processQueue();
         broadcastStatus();
@@ -309,7 +325,9 @@ async function performGeminiQuery(hostname) {
         if (!response.ok) {
             const errorBody = await response.text();
             console.error(`API Error (${response.status} ${response.statusText}) Body:`, errorBody);
-            throw new Error(`API Error: ${response.status} ${response.statusText}`);
+            const err = new Error(`API Error: ${response.status} ${response.statusText}`);
+            err.status = response.status;
+            throw err;
         }
 
         const result = await response.json();
