@@ -53,6 +53,76 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // -------------------------------------------------------------
+    // Provider Settings Logic
+    // -------------------------------------------------------------
+    const providerSettingsDiv = document.getElementById('provider-settings');
+    const toggleWrapper = document.getElementById('provider-toggle-wrapper');
+
+    function migrateSources(sources) {
+        if (!sources || sources.length === 0) return [];
+        if (typeof sources[0] === 'string') {
+            return sources.map(s => ({ domain: s, state: 'on', visits: 0 }));
+        }
+        return sources;
+    }
+
+    if (currentHostname) {
+        const migratedSources = migrateSources(sources);
+        // Flexible matching
+        const matchedSource = migratedSources.find(s =>
+            currentHostname === s.domain || currentHostname.endsWith('.' + s.domain) || s.domain.endsWith('.' + currentHostname)
+        );
+
+        if (matchedSource) {
+            providerSettingsDiv.style.display = 'block';
+
+            // Render 3-state toggle (Off/Auto/On)
+            const states = ['off', 'auto', 'on'];
+            const slider = document.createElement('input');
+            slider.type = 'range';
+            slider.min = 0;
+            slider.max = 2;
+            slider.value = states.indexOf(matchedSource.state);
+            slider.style.width = '100%';
+            slider.style.cursor = 'pointer';
+
+            const getColor = (state) => state === 'on' ? '#2ecc71' : (state === 'auto' ? '#f39c12' : '#95a5a6');
+            slider.style.accentColor = getColor(matchedSource.state);
+
+            const label = document.createElement('div');
+            label.style.textAlign = 'center';
+            label.style.fontSize = '0.8rem';
+            label.style.marginTop = '2px';
+            label.style.fontWeight = 'bold';
+            label.style.color = '#555';
+            label.textContent = matchedSource.state.toUpperCase();
+
+            slider.oninput = () => {
+                const newState = states[parseInt(slider.value)];
+                label.textContent = newState.toUpperCase();
+                slider.style.accentColor = getColor(newState);
+            };
+
+            slider.onchange = async () => {
+                const newState = states[parseInt(slider.value)];
+                // Reload latest sources to avoid overwrite race condition
+                const { sources: latestSources } = await chrome.storage.sync.get(['sources']);
+                let currentSources = migrateSources(latestSources);
+                // Find by domain equality to ensure we update the right record
+                const target = currentSources.find(s => s.domain === matchedSource.domain);
+                if (target) {
+                    target.state = newState;
+                    await chrome.storage.sync.set({ sources: currentSources });
+                }
+            };
+
+            toggleWrapper.innerHTML = '';
+            toggleWrapper.appendChild(slider);
+            toggleWrapper.appendChild(label);
+        }
+    }
+
+    // -------------------------------------------------------------
     // Rendering logic
     // -------------------------------------------------------------
     function getStarRatingHtml(rating) {

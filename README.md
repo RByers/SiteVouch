@@ -32,3 +32,13 @@ SiteVouch is a Chrome extension for experimenting with [ideas](https://docs.goog
  - Add sites you rely on for reviews of other websites or businesses.
  - Get a [Gemini API key](https://aistudio.google.com/api-keys) and paste it here.
  - Start browsing and watch the extension icon.
+
+## FAQ
+
+**Q) Shouldn't we also look at the URL or content on the page to really establish reputation? Eg. for a site like YouTube, it's often the channel whose reputation matters, not the site.**
+
+A) That would certainly be valuable, but doing per-page analysis adds a host of additional cost and complexity. This extension attempts to explore the most tractable subset of the reputation problem. That said, I do plan to also add an experimental option for experimenting with this.
+
+**Q) How can we speed it up?**
+
+In a real built-in browser implementation we'd likely cache requests on a server. This would give near instant

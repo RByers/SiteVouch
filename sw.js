@@ -49,6 +49,49 @@ async function updateBadgeForRating(tabId, reviews) {
 }
 
 // ---------------------------------------------------------
+// Helper: Source Logic
+// ---------------------------------------------------------
+
+function migrateSources(sources) {
+    if (!sources || sources.length === 0) return [];
+    if (typeof sources[0] === 'string') {
+        return sources.map(s => ({
+            domain: s,
+            state: 'on',
+            visits: 0
+        }));
+    }
+    return sources;
+}
+
+function getActiveSources(sourcesRaw, maxProviders) {
+    const sources = migrateSources(sourcesRaw);
+
+    // Sort logic: On, Auto, Off. Within group: Visits desc.
+    const stateOrder = { 'on': 0, 'auto': 1, 'off': 2 };
+    const sorted = [...sources].sort((a, b) => {
+        if (stateOrder[a.state] !== stateOrder[b.state]) {
+            return stateOrder[a.state] - stateOrder[b.state];
+        }
+        return (b.visits || 0) - (a.visits || 0);
+    });
+
+    const activeDomains = [];
+    const onSources = sorted.filter(s => s.state === 'on');
+    const autoSources = sorted.filter(s => s.state === 'auto');
+
+    // Add all 'on' sources
+    onSources.forEach(s => activeDomains.push(s.domain));
+
+    // Add 'auto' sources up to limit
+    const remainingSlots = Math.max(0, maxProviders - onSources.length);
+    const activeAuto = autoSources.slice(0, remainingSlots);
+    activeAuto.forEach(s => activeDomains.push(s.domain));
+
+    return activeDomains;
+}
+
+// ---------------------------------------------------------
 // Cache Logic
 // ---------------------------------------------------------
 
@@ -64,9 +107,6 @@ async function getFromCache(hostname) {
     const currentModel = preferredModel || 'gemini-3-flash-preview';
 
     if (entry.model !== currentModel) {
-        // Model mismatch - treat as stale/invalid (or just return null to force re-fetch)
-        // User said: "consider a cache to be stale whenever the model name doesn't match"
-        // Returning null basically forces a re-queue.
         return null;
     }
 
@@ -128,12 +168,7 @@ function addToQueue(hostname, forceRefresh = false, tabId = null) {
 
     // Check if it's currently being processed
     if (currentTask && currentTask.hostname === hostname) {
-        if (forceRefresh && !currentTask.forceRefresh) {
-            // It's already running but wasn't forced... we can't easily "upgrade" the running task
-            // but we could queue a new forced one if we really wanted. 
-            // For simplicity, we just let the current one finish.
-        }
-        if (tabId) currentTask.tabId = tabId; // Update tabId so icon updates correctly
+        if (tabId) currentTask.tabId = tabId;
         return;
     }
 
@@ -164,7 +199,6 @@ async function processQueue() {
         const freshData = await getFromCache(currentTask.hostname);
         if (freshData) {
             await updateBadgeForRating(currentTask.tabId, freshData.reviews);
-            // Success - ensure error is clear
             lastError = null;
         }
 
@@ -192,31 +226,36 @@ function sanitizeSource(source) {
 }
 
 async function performGeminiQuery(hostname) {
-    const { geminiApiKey, sources, preferredModel, maxBullets, maxWords } = await chrome.storage.sync.get(['geminiApiKey', 'sources', 'preferredModel', 'maxBullets', 'maxWords']);
+    const { geminiApiKey, sources, preferredModel, maxBullets, maxWords, maxProviders } =
+        await chrome.storage.sync.get(['geminiApiKey', 'sources', 'preferredModel', 'maxBullets', 'maxWords', 'maxProviders']);
 
     const limitBullets = maxBullets || 3;
     const limitWords = maxWords || 6;
+    const limitProviders = maxProviders || 20;
 
     if (!geminiApiKey || !sources || sources.length === 0) {
         return;
     }
 
-    const cleanSources = sources.map(sanitizeSource).filter(s => s && s.length > 0);
-    if (cleanSources.length === 0) {
-        console.warn("No valid sources after sanitization");
+    const cleanSourceDomains = getActiveSources(sources, limitProviders)
+        .map(sanitizeSource)
+        .filter(s => s && s.length > 0);
+
+    if (cleanSourceDomains.length === 0) {
+        console.warn("No active sources after filtering");
         return;
     }
 
     const prompt = `
     You are a site reputation analyzer.
     Target Hostname: "${hostname}"
-    Trusted Sources: ${cleanSources.join(', ')}
+    Trusted Sources: ${cleanSourceDomains.join(', ')}
 
     Goal: Find valid reputation signals strictly from the trusted sources.
 
-    Step 1: execute Google Search queries to find reviews on each of the following websites: ${cleanSources.join(', ')}
+    Step 1: execute Google Search queries to find reviews on each of the following websites: ${cleanSourceDomains.join(', ')}
     **CRITICAL: You must construct your search queries using the "site:" operator.** 
-     - Example: "site:${cleanSources[0]} ${hostname} reviews"    
+     - Example: "site:${cleanSourceDomains[0]} ${hostname} reviews"    
     Step 2: For each result, verify it is a review page for the SPECIFIC target hostname.
     Step 3: Extract the rating (or estimate sentiment 0-5) and summary.
 
@@ -283,31 +322,48 @@ async function performGeminiQuery(hostname) {
 
     } catch (e) {
         console.error("Gemini API Failed", e);
-        throw e; // Re-throw to be caught by processQueue
+        throw e;
     }
-}
-
-// ---------------------------------------------------------
-// UI / Badge Logic
-// ---------------------------------------------------------
-
-function calculateRating(reviews) {
-    if (!reviews || reviews.length === 0) return null;
-    const sum = reviews.reduce((acc, r) => acc + (r.rating || 0), 0);
-    return sum / reviews.length;
 }
 
 // ---------------------------------------------------------
 // Navigation & Listeners
 // ---------------------------------------------------------
 
-async function handleNavigation(tabId, url) {
-    // Always clear badge first to avoid stale state
-    await chrome.action.setBadgeText({ text: "", tabId }).catch(() => { });
+async function checkAndIncrementVisits(url) {
+    if (!url) return;
+    try {
+        const hostname = new URL(url).hostname;
+        const { sources } = await chrome.storage.sync.get(['sources']);
+        const migrated = migrateSources(sources); // Ensure object format
 
-    if (!url || !url.startsWith('http')) {
-        return;
+        let changed = false;
+        // Check if hostname matches any source domain
+        // (Loose match? or strict? Assumed strict domain match or strict hostname)
+        // User said "domain". If source is "trustpilot.com", visiting "www.trustpilot.com" should count.
+        // let's do includes check or endswith
+
+        const matchIndex = migrated.findIndex(s =>
+            hostname === s.domain || hostname.endsWith('.' + s.domain) || s.domain.endsWith('.' + hostname)
+        );
+
+        if (matchIndex !== -1) {
+            migrated[matchIndex].visits = (migrated[matchIndex].visits || 0) + 1;
+            await chrome.storage.sync.set({ sources: migrated });
+        }
+    } catch (e) {
+        console.error("Visit Check Error", e);
     }
+}
+
+async function handleNavigation(tabId, url) {
+    if (!url || !url.startsWith('http')) return;
+
+    // Check if this is a visit to a provider
+    await checkAndIncrementVisits(url);
+
+    // Always clear badge first
+    await chrome.action.setBadgeText({ text: "", tabId }).catch(() => { });
 
     try {
         const hostname = new URL(url).hostname;
