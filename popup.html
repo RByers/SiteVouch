@@ -30,9 +30,12 @@
     </div>
   </div>
 
-  <div id="provider-settings" style="display: none; padding: 10px; background: #f5f5f5; border-bottom: 1px solid #e0e0e0;">
-    <div style="font-size: 0.85rem; font-weight: 500; margin-bottom: 5px; color: #555;">Reputation Provider Setting:</div>
-    <div id="provider-toggle-wrapper"></div>
+  <div id="provider-settings" style="display: none;">
+    <div class="provider-label">Provider Setting:</div>
+    <div class="toggle-container">
+      <input type="range" min="0" max="2" class="toggle-slider" id="provider-slider">
+      <span class="state-label" id="provider-state-text">AUTO</span>
+    </div>
   </div>
 
   <div id="gemini-result"></div>

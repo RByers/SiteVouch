@@ -35,10 +35,15 @@ SiteVouch is a Chrome extension for experimenting with [ideas](https://docs.goog
 
 ## FAQ
 
+**Q) Isn't relying on the user's choice of sources just going to reinforce their biases (like a "filter buuble")?
+
+Perhaps, but for something hoping to be built into a major browser there is no other choice. Also research suggests that empowering people to make their preferred appraoch to fact-checking easier is more likely to be effective than trying to convince people they should trust any particular source not of their own choosing. 
+
 **Q) Shouldn't we also look at the URL or content on the page to really establish reputation? Eg. for a site like YouTube, it's often the channel whose reputation matters, not the site.**
 
-A) That would certainly be valuable, but doing per-page analysis adds a host of additional cost and complexity. This extension attempts to explore the most tractable subset of the reputation problem. That said, I do plan to also add an experimental option for experimenting with this.
+A) That would certainly be valuable, but doing per-page analysis adds a host of additional cost and complexity. This extension attempts to explore the most tractable subset of the reputation problem. That said, I do plan to experiment with a different version of this extension which explores this space.
 
 **Q) How can we speed it up?**
 
-In a real built-in browser implementation we'd likely cache requests on a server. This would give near instant
+A) In a real built-in browser implementation we'd likely cache host/source results on a server. This would make it close to instant most of the time.
+

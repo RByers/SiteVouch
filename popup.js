@@ -56,7 +56,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Provider Settings Logic
     // -------------------------------------------------------------
     const providerSettingsDiv = document.getElementById('provider-settings');
-    const toggleWrapper = document.getElementById('provider-toggle-wrapper');
+    const providerSlider = document.getElementById('provider-slider');
+    const providerStateText = document.getElementById('provider-state-text');
 
     function migrateSources(sources) {
         if (!sources || sources.length === 0) return [];
@@ -68,57 +69,38 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (currentHostname) {
         const migratedSources = migrateSources(sources);
-        // Flexible matching
         const matchedSource = migratedSources.find(s =>
             currentHostname === s.domain || currentHostname.endsWith('.' + s.domain) || s.domain.endsWith('.' + currentHostname)
         );
 
         if (matchedSource) {
-            providerSettingsDiv.style.display = 'block';
+            providerSettingsDiv.style.display = 'flex';
 
-            // Render 3-state toggle (Off/Auto/On)
             const states = ['off', 'auto', 'on'];
-            const slider = document.createElement('input');
-            slider.type = 'range';
-            slider.min = 0;
-            slider.max = 2;
-            slider.value = states.indexOf(matchedSource.state);
-            slider.style.width = '100%';
-            slider.style.cursor = 'pointer';
 
-            const getColor = (state) => state === 'on' ? '#2ecc71' : (state === 'auto' ? '#f39c12' : '#95a5a6');
-            slider.style.accentColor = getColor(matchedSource.state);
+            // Set initial state
+            providerSlider.value = states.indexOf(matchedSource.state);
+            providerSlider.className = `toggle-slider state-${matchedSource.state}`;
+            providerStateText.textContent = matchedSource.state;
 
-            const label = document.createElement('div');
-            label.style.textAlign = 'center';
-            label.style.fontSize = '0.8rem';
-            label.style.marginTop = '2px';
-            label.style.fontWeight = 'bold';
-            label.style.color = '#555';
-            label.textContent = matchedSource.state.toUpperCase();
-
-            slider.oninput = () => {
-                const newState = states[parseInt(slider.value)];
-                label.textContent = newState.toUpperCase();
-                slider.style.accentColor = getColor(newState);
+            // UI Update handler
+            providerSlider.oninput = () => {
+                const newState = states[parseInt(providerSlider.value)];
+                providerStateText.textContent = newState;
+                providerSlider.className = `toggle-slider state-${newState}`;
             };
 
-            slider.onchange = async () => {
-                const newState = states[parseInt(slider.value)];
-                // Reload latest sources to avoid overwrite race condition
+            // Logic Commit handler
+            providerSlider.onchange = async () => {
+                const newState = states[parseInt(providerSlider.value)];
                 const { sources: latestSources } = await chrome.storage.sync.get(['sources']);
                 let currentSources = migrateSources(latestSources);
-                // Find by domain equality to ensure we update the right record
                 const target = currentSources.find(s => s.domain === matchedSource.domain);
                 if (target) {
                     target.state = newState;
                     await chrome.storage.sync.set({ sources: currentSources });
                 }
             };
-
-            toggleWrapper.innerHTML = '';
-            toggleWrapper.appendChild(slider);
-            toggleWrapper.appendChild(label);
         }
     }
 
@@ -274,7 +256,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 countdownInterval = null;
                 return;
             }
-            queueDiv.textContent = `Server busy (503). Retrying in ${diff}s...`;
+            queueDiv.textContent = `Retrying in ${diff}s...`;
         };
 
         update(); // Run immediately
