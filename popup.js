@@ -45,11 +45,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (!sources || sources.length === 0) {
-        resultDiv.innerHTML = "No reputation sources configured.<br>Please add sources in the extension settings.";
-        resultDiv.style.color = "#d32f2f"; // Error color
-        refreshBtn.disabled = true;
-        refreshBtn.classList.add('disabled');
-        return; // Stop further initialization
+        resultDiv.innerHTML = "Discovering trusted reputation sources.<br>Alternatively add sources manually in settings.";
+        resultDiv.style.color = "#555";
     }
 
     // -------------------------------------------------------------
@@ -142,7 +139,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        console.log("Grounding Metadata:", groundingMetadata);
         sourcesDiv.style.display = 'block';
 
         const queries = groundingMetadata.webSearchQueries || [];

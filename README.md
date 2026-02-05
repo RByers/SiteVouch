@@ -2,8 +2,12 @@
 
 SiteVouch is a Chrome extension for experimenting with [ideas](https://docs.google.com/document/d/1wTFafdHa-o3OYCKmYzEJGROrpSoxXN6DNXPltzdiUzg/edit?tab=t.0#heading=h.40o7mijeapa7) around built-in browser support for website reputation signalling. As a rapid prototype, this was hacked together quickly using Gemini and Google Antigravity without any tests or other engineering rigour.
 
+## Vision
+
+Users sometimes consult reviews and ratings of websites to help determine how much they should be trusted, but this is laborious. Browsers can help by automating this task and proactively providing a summary of what the user would discover if they had put the effort into their own preferred approach to reputation checking.
+
 ## Goals
-- Automatically indicate whether a website is reputable, disreputable or of mixed reputation while browsing. Zero clicks required.
+- Automatically indicate whether a website is reputable, disreputable or of mixed reputation while browsing. Zero clicks or configuration required (beyond providing an API key).
 - [Empower](https://www.youtube.com/watch?v=nTaAKbK6nXg) users to select their own trusted sources of website reputation signals. Don't presume any "root of trust".
 - Enable the user to very easily get a summary of reputation for a site from each source, and click through to read full details.
 - Be useful for most websites without requiring explicit integration from reputation sources.
@@ -28,7 +32,8 @@ SiteVouch is a Chrome extension for experimenting with [ideas](https://docs.goog
 ## Installation
  - Clone this repo: `git clone https://github.com/RByers/SiteVouch.git`
  - Open `chrome://extensions/`, enable Developer Mode, and use "Load Unpacked Extension"
- - You should now see the SiteVouch icon in your extensions list. Right click on it and select "Options"
+ - Pin the SiteVouch icon in your extensions list. 
+ Right click on the SiteVouch icon and select "Options"
  - Get a [Gemini API key](https://aistudio.google.com/api-keys) and paste it here.
  - Start browsing and watch the extension icon. Manually consult some site reviews, and the extension should learn to search those sources automatically.
 

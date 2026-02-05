@@ -113,21 +113,20 @@ async function getFromCache(hostname) {
     }
 
     // Mark stale if settings have changed since this entry was created
-    // (Entry stores the settings timestamp it was created with)
-    const settingsStale = entry.settingsTimestamp && entry.settingsTimestamp < globalSettingsTs;
+    // (Entry timestamp is creation time. If creation < lastSettingsChange, it's stale)
+    const settingsStale = entry.timestamp < globalSettingsTs;
 
     // Return entry even if stale (callers can decide to refresh)
     entry.isStale = (age > CACHE_STALE_MS) || settingsStale;
     return entry;
 }
 
-async function saveToCache(hostname, reviews, settingsTimestamp, isSource, groundingMetadata) {
+async function saveToCache(hostname, reviews, isSource, groundingMetadata) {
     const key = `cache_${hostname}`;
     const entry = {
         hostname: hostname,
         timestamp: Date.now(),
         reviews: reviews,
-        settingsTimestamp: settingsTimestamp,
         isSource: isSource,
         groundingMetadata: groundingMetadata
     };
@@ -201,6 +200,9 @@ async function processQueue() {
         if (freshData) {
             await updateBadgeForRating(currentTask.tabId, freshData.reviews);
             lastError = null;
+            currentTask = null;
+            processQueue();
+            broadcastStatus();
         }
 
     } catch (error) {
@@ -250,41 +252,49 @@ async function performGeminiQuery(hostname) {
     const limitWords = maxWords || 6;
     const limitProviders = maxProviders || 20;
     const shouldAutoAdd = (autoAddSources !== false); // Default true
-    const currentSettingsTimestamp = lastSettingsChange || 0;
 
-    if (!geminiApiKey || !sources || sources.length === 0) {
+    if (!geminiApiKey) {
         return;
     }
 
-    const cleanSourceDomains = getActiveSources(sources, limitProviders)
+    const cleanSourceDomains = sources ? getActiveSources(sources, limitProviders)
         .map(sanitizeSource)
-        .filter(s => s && s.length > 0);
+        .filter(s => s && s.length > 0) : [];
 
-    if (cleanSourceDomains.length === 0) {
-        console.warn("No active sources after filtering");
-        return;
+    let prompt;
+    if (cleanSourceDomains.length > 0) {
+        prompt = `
+        You are a site reputation analyzer.
+        Target Hostname: "${hostname}"
+        Trusted Sources: ${cleanSourceDomains.join(', ')}
+
+        Goal: Find valid reputation signals strictly from the trusted sources.
+
+        Step 1: execute Google Search queries to find reviews on each of the following websites: ${cleanSourceDomains.join(', ')}
+        **CRITICAL: You must construct your search queries using the "site:" operator.** 
+         - Example: "site:${cleanSourceDomains[0]} ${hostname} reviews"    
+        Step 2: For each result, verify it is a review page for the SPECIFIC target hostname.
+        Step 3: Extract the rating (or estimate sentiment 0-5) and summary.
+        Step 4: Determine if "${hostname}" itself is a "Reputation Source" (a platform hosting reviews or discussions of a wide variety of websites).
+
+        Rules:
+        - Do NOT search the broad web. Only use the sources listed.
+        - Do NOT invent URLs. Use the exact "source_title" anchor to locate the link.
+        - Return at most ${limitBullets} bullet points per summary (${limitWords} words max).
+        - Set "isSource" to true if "${hostname}" is a generalized review site, forum or other source of information about a variety of websites and businesses.
+        `;
+    } else {
+        prompt = `
+        You are a site reputation analyzer.
+        Target Hostname: "${hostname}"
+
+        Goal: Determine if "${hostname}" itself is a "Reputation Source" (a platform hosting reviews or discussions of a wide variety of websites).
+
+        Rules:
+        - Return an empty list for "reviews".
+        - Set "isSource" to true if "${hostname}" is a generalized review site, forum or other source of information about a variety of websites and businesses.
+        `;
     }
-
-    const prompt = `
-    You are a site reputation analyzer.
-    Target Hostname: "${hostname}"
-    Trusted Sources: ${cleanSourceDomains.join(', ')}
-
-    Goal: Find valid reputation signals strictly from the trusted sources.
-
-    Step 1: execute Google Search queries to find reviews on each of the following websites: ${cleanSourceDomains.join(', ')}
-    **CRITICAL: You must construct your search queries using the "site:" operator.** 
-     - Example: "site:${cleanSourceDomains[0]} ${hostname} reviews"    
-    Step 2: For each result, verify it is a review page for the SPECIFIC target hostname.
-    Step 3: Extract the rating (or estimate sentiment 0-5) and summary.
-    Step 4: Determine if "${hostname}" itself is a "Reputation Source" (a platform hosting reviews or discussions of a wide variety of websites).
-
-    Rules:
-    - Do NOT search the broad web. Only use the sources listed.
-    - Do NOT invent URLs. Use the exact "source_title" anchor to locate the link.
-    - Return at most ${limitBullets} bullet points per summary (${limitWords} words max).
-    - Set "isSource" to true ONLY if "${hostname}" is a generalized review site or forum.
-    `;
     const model = preferredModel || 'gemini-3-flash-preview';
 
     const responseSchema = {
@@ -313,61 +323,55 @@ async function performGeminiQuery(hostname) {
         "required": ["reviews"]
     };
 
-    try {
-        console.log("Prompting Gemini:", prompt);
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: {
-                    responseMimeType: "application/json",
-                    responseSchema: responseSchema
-                },
-                tools: [{ google_search: {} }]
-            })
-        });
+    console.log("Prompting Gemini:", prompt);
+    const startTime = Date.now();
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+                responseMimeType: "application/json",
+                responseSchema: responseSchema
+            },
+            tools: [{ google_search: {} }]
+        })
+    });
 
-        if (!response.ok) {
-            const errorBody = await response.text();
-            console.error(`API Error (${response.status} ${response.statusText}) Body:`, errorBody);
-            const err = new Error(`API Error: ${response.status} ${response.statusText}`);
-            err.status = response.status;
-            throw err;
-        }
+    const duration = (Date.now() - startTime) / 1000;
+    const result = await response.json();
+    console.log(`Gemini API Response in ${duration}s:`, result);
 
-        const result = await response.json();
-
-        const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-        const jsonResult = JSON.parse(text);
-
-        // Auto-add logic
-        if (jsonResult.reputationSource && shouldAutoAdd) {
-            const migrated = migrateSources(sources);
-            // Check if exists
-            const exists = migrated.some(s => s.domain === hostname || hostname.endsWith('.' + s.domain));
-            if (!exists) {
-                console.log(`Auto-adding new reputation source: ${hostname}`);
-                migrated.push({
-                    domain: hostname,
-                    state: 'auto',
-                    visits: 0
-                });
-                // Update storage - strict mode, async
-                await chrome.storage.sync.set({ sources: migrated });
-
-                // Note: We don't need to re-query immediately, 
-                // but next time this source might be used if it's high priority.
-            }
-        }
-
-        const metadata = result.candidates?.[0]?.groundingMetadata;
-        await saveToCache(hostname, jsonResult.reviews || [], model, metadata);
-
-    } catch (e) {
-        console.error("Gemini API Failed", e);
-        throw e;
+    if (!response.ok) {
+        console.error(`API Error (${response.status} ${response.statusText})`);
+        const err = new Error(`API Error: ${response.status} ${response.statusText}`);
+        err.status = response.status;
+        throw err;
     }
+
+    const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+    const jsonResult = JSON.parse(text);
+
+    // Auto-add logic
+    if (jsonResult.isSource && shouldAutoAdd) {
+        const migrated = migrateSources(sources);
+        // Check if exists
+        const exists = migrated.some(s => s.domain === hostname || hostname.endsWith('.' + s.domain));
+        if (!exists) {
+            console.log(`Auto-adding new reputation source: ${hostname}`);
+            migrated.push({
+                domain: hostname,
+                state: 'auto',
+                visits: 0
+            });
+            // Update storage - strict mode, async
+            await chrome.storage.sync.set({ sources: migrated, lastSettingsChange: Date.now() });
+
+            // Note: We don't need to re-query immediately, 
+        }
+    }
+    const metadata = result.candidates?.[0]?.groundingMetadata;
+    await saveToCache(hostname, jsonResult.reviews || [], !!jsonResult.isSource, metadata);
 }
 
 // ---------------------------------------------------------
