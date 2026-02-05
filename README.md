@@ -1,6 +1,6 @@
 # SiteVouch
 
-SiteVouch is a Chrome extension for experimenting with [ideas](https://docs.google.com/document/d/1wTFafdHa-o3OYCKmYzEJGROrpSoxXN6DNXPltzdiUzg/edit?tab=t.0#heading=h.40o7mijeapa7) around built-in browser support for website reputation signalling. As a rapid prototype, this was hacked together quickly using Gemini and Google Antigravity without any tests or other engineering rigour.
+SiteVouch is a Chrome extension for experimenting with [ideas](https://docs.google.com/document/d/1wTFafdHa-o3OYCKmYzEJGROrpSoxXN6DNXPltzdiUzg/edit?tab=t.0#heading=h.40o7mijeapa7) around built-in browser support for website reputation signalling. As just a weekend hobby project and rapid prototype, this was hacked together quickly using Gemini and Google Antigravity without any tests or other engineering rigour.
 
 ## Vision
 
@@ -11,6 +11,7 @@ Users sometimes consult reviews and ratings of websites to help determine how mu
 - [Empower](https://www.youtube.com/watch?v=nTaAKbK6nXg) users to select their own trusted sources of website reputation signals. Don't presume any "root of trust".
 - Enable the user to very easily get a summary of reputation for a site from each source, and click through to read full details.
 - Be useful for most websites without requiring explicit integration from reputation sources.
+- Clearly surface disagreements across different sources to help users refine which sources they find most useful.
 
 ## Design
 - Allow the user to enter a list of websites as trusted providers of reputation (Eg. [BBB.org](https://bbb.org), [TrustPilot.com](https://trustpilot.com)).
@@ -25,8 +26,8 @@ Users sometimes consult reviews and ratings of websites to help determine how mu
 
 ## Limitations
 - Requires the user to provide their own [Gemini API key](https://aistudio.google.com/api-keys), which (after a free trial period) will incur a small cost.
-- LLM-based approach is not entirely reliable. In particular there can be some halucination, especially in the review URLs.
-- Takes several seconds to gather signals for a new site in the background.
+- LLM-based approach with search grounding is (not entirely reliable)[https://github.com/RByers/SiteVouch/issues/1]. In particular there can be some halucination, especially in the review URLs.
+- Takes up to a minute to gather signals for a new site in the background.
 - Operates only at the granularity of a site, not useful for getting reputation on specific pages or channels in aggregation sites like YouTube.
 
 ## Installation
