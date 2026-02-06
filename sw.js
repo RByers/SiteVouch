@@ -27,14 +27,18 @@ async function updateBadgeForRating(tabId, reviews) {
         return;
     }
 
+    const { positiveThreshold, negativeThreshold } = await chrome.storage.sync.get(['positiveThreshold', 'negativeThreshold']);
+    const posThresh = positiveThreshold !== undefined ? positiveThreshold : 4.0;
+    const negThresh = negativeThreshold !== undefined ? negativeThreshold : 2.5;
+
     const rating = calculateRating(reviews);
     let text = "∓";
     let color = "#FFEE58"; // Yellow-ish
 
-    if (rating >= 4) {
+    if (rating >= posThresh) {
         text = "👍";
         color = "#66BB6A"; // Green
-    } else if (rating <= 2.5) {
+    } else if (rating <= negThresh) {
         text = "👎";
         color = "#EF5350"; // Red
     }
@@ -251,7 +255,7 @@ async function performGeminiQuery(hostname) {
         await chrome.storage.sync.get(['geminiApiKey', 'sources', 'preferredModel', 'maxBullets', 'maxWords', 'maxProviders', 'autoAddSources', 'lastSettingsChange']);
 
     const limitBullets = maxBullets || 3;
-    const limitWords = maxWords || 6;
+    const limitWords = maxWords || 8;
     const limitProviders = maxProviders || 20;
     const shouldAutoAdd = (autoAddSources !== false); // Default true
 

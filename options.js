@@ -5,6 +5,8 @@ const apiKeyInput = document.getElementById('apiKey');
 const modelSelect = document.getElementById('modelSelect');
 const maxBulletsInput = document.getElementById('maxBullets');
 const maxWordsInput = document.getElementById('maxWords');
+const positiveThresholdInput = document.getElementById('positiveThreshold');
+const negativeThresholdInput = document.getElementById('negativeThreshold');
 const maxProvidersInput = document.getElementById('maxProviders');
 
 // Global state to maintain order between updates
@@ -118,13 +120,15 @@ function renderList() {
 }
 
 function initializeSettings() {
-    chrome.storage.sync.get(['sources', 'geminiApiKey', 'preferredModel', 'maxBullets', 'maxWords', 'maxProviders'], (data) => {
+    chrome.storage.sync.get(['sources', 'geminiApiKey', 'preferredModel', 'maxBullets', 'maxWords', 'positiveThreshold', 'negativeThreshold', 'maxProviders'], (data) => {
         let sources = migrateSources(data.sources);
 
         if (data.geminiApiKey) apiKeyInput.value = data.geminiApiKey;
         modelSelect.value = data.preferredModel || "gemini-3-flash-preview";
         if (data.maxBullets) maxBulletsInput.value = data.maxBullets;
         if (data.maxWords) maxWordsInput.value = data.maxWords;
+        positiveThresholdInput.value = data.positiveThreshold !== undefined ? data.positiveThreshold : 4.0;
+        negativeThresholdInput.value = data.negativeThreshold !== undefined ? data.negativeThreshold : 2.5;
 
         currentMaxProviders = data.maxProviders || 20;
         maxProvidersInput.value = currentMaxProviders;
@@ -148,6 +152,14 @@ maxBulletsInput.addEventListener('change', () => {
 maxWordsInput.addEventListener('change', () => {
     const val = parseInt(maxWordsInput.value, 10);
     if (val > 0) chrome.storage.sync.set({ maxWords: val, lastSettingsChange: Date.now() });
+});
+positiveThresholdInput.addEventListener('change', () => {
+    const val = parseFloat(positiveThresholdInput.value);
+    if (!isNaN(val)) chrome.storage.sync.set({ positiveThreshold: val });
+});
+negativeThresholdInput.addEventListener('change', () => {
+    const val = parseFloat(negativeThresholdInput.value);
+    if (!isNaN(val)) chrome.storage.sync.set({ negativeThreshold: val });
 });
 maxProvidersInput.addEventListener('change', () => {
     const val = parseInt(maxProvidersInput.value, 10);
