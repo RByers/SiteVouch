@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const refreshBtn = document.getElementById('refresh-btn');
     const resultDiv = document.getElementById('gemini-result');
     const queueDiv = document.getElementById('queue-status');
+    const retryDiv = document.getElementById('retry-status');
     const sourcesDiv = document.getElementById('sources-container');
 
     const settingsBtn = document.getElementById('settings-btn');
@@ -248,12 +249,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             const diff = Math.ceil((targetTime - now) / 1000);
 
             if (diff <= 0) {
-                queueDiv.textContent = "Retrying now...";
+                if (retryDiv) retryDiv.textContent = "";
                 clearInterval(countdownInterval);
                 countdownInterval = null;
                 return;
             }
-            queueDiv.textContent = `Retrying in ${diff}s...`;
+            if (retryDiv) retryDiv.textContent = `Retrying in ${diff}s...`;
         };
 
         update(); // Run immediately
@@ -262,11 +263,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function renderStatus(status) {
         // Clear any existing countdown if we are not in a waiting state
-        if (!status.currentTask || !status.currentTask.nextRetryTime) {
+        // OR if the waiting state is over
+        if (!status?.currentTask?.nextRetryTime || status.currentTask.nextRetryTime <= Date.now()) {
             if (countdownInterval) {
                 clearInterval(countdownInterval);
                 countdownInterval = null;
             }
+            if (retryDiv) retryDiv.textContent = "";
         }
 
         let allTasks = [];
@@ -277,16 +280,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             allTasks = allTasks.concat(status.queue);
         }
 
-        // Priority: Current Task Waiting -> Error -> Queue List
+        // Retry Display Logic - shows ABOVE queue
         if (status.currentTask && status.currentTask.nextRetryTime && status.currentTask.nextRetryTime > Date.now()) {
             startCountdown(status.currentTask.nextRetryTime);
-        } else if (status.lastError) {
-            queueDiv.innerHTML = `<span style="color: #d32f2f;">Error: ${status.lastError}</span>`;
-            // If we have tasks, append them
+        } else {
+            // Double check it's cleared if we didn't start it
+            if (!countdownInterval && retryDiv) retryDiv.textContent = "";
+        }
+
+        // Queue/Processing Display Logic - Always shows if tasks exist
+        if (status.lastError) {
+            let content = `<span style="color: #d32f2f;">Error: ${status.lastError}</span>`;
             if (allTasks.length > 0) {
                 const hostnames = allTasks.map(t => t.hostname).join(', ');
-                queueDiv.innerHTML += `<br>Processing: ${hostnames}`;
+                content += `<br>Processing: ${hostnames}`;
             }
+            queueDiv.innerHTML = content;
         } else if (allTasks.length > 0) {
             const hostnames = allTasks.map(t => t.hostname).join(', ');
             queueDiv.textContent = `Processing: ${hostnames}`;
