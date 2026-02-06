@@ -183,21 +183,13 @@ th {
 
 /* Provider Settings Compact UI */
 #provider-settings {
-    display: flex;
+    /* No panel styles needed for header placement */
+    display: none;
+    /* Controlled by JS */
     align-items: center;
-    justify-content: flex-start;
-    padding: 8px 12px;
-    background: #f9f9f9;
-    border-bottom: 1px solid #e0e0e0;
-    margin-bottom: 15px;
 }
 
-.provider-label {
-    font-size: 12px;
-    font-weight: 500;
-    color: #555;
-    margin-right: 10px;
-}
+/* Label removed */
 
 /* Toggle Switch Styles (Matched to Options Page) */
 .toggle-container {

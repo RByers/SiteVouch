@@ -15,6 +15,12 @@
       </div>
     </div>
     <div class="header-actions">
+      <div id="provider-settings" style="display: none; margin-right: 10px;" title="Use as reputation source">
+        <div class="toggle-container">
+          <input type="range" min="0" max="2" class="toggle-slider" id="provider-slider">
+          <span class="state-label" id="provider-state-text">AUTO</span>
+        </div>
+      </div>
       <button id="settings-btn" class="refresh-icon-btn" title="Settings" style="margin-right: 5px;">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="3"></circle>
@@ -30,13 +36,7 @@
     </div>
   </div>
 
-  <div id="provider-settings" style="display: none;">
-    <div class="provider-label">Use as reputation source:</div>
-    <div class="toggle-container">
-      <input type="range" min="0" max="2" class="toggle-slider" id="provider-slider">
-      <span class="state-label" id="provider-state-text">AUTO</span>
-    </div>
-  </div>
+
 
   <div id="gemini-result"></div>
   <div id="sources-container"></div>
