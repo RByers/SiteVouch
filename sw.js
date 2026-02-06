@@ -277,13 +277,13 @@ async function performGeminiQuery(hostname) {
 
         Goal: Find valid reputation signals strictly from the trusted sources.
 
-        Step 1: Execute ONE Google Search query to find reviews on each of the following websites: ${cleanSourceDomains.join(', ')}
-        Step 2: For each result, verify it is a review page for the SPECIFIC target hostname.
-        Step 3: If so, extract the rating (or estimate sentiment 0-5) and summary of reviews.
+        Step 1: Execute ONE Google Search query: "reviews of ${hostname} from ${cleanSourceDomains.join(', ')}
+        Step 2: For each result, determine if it is a review page for the SPECIFIC target hostname from one of the trusted sources.
+        Step 3: If so, extract the rating (or estimate sentiment 0-5) and summary of reviews. Otherwise ignore it.
         Step 4: Determine if "${hostname}" itself is a "Reputation Source" (a platform hosting reviews or discussions of a wide variety of websites).
 
         Rules:
-        - Do NOT consulte sources other than those provided.
+        - Do NOT consider sources other than those provided.
         - Include the URL of review page summarized using the search grounding tool. Use an empty string if unsure.
         - Return at most ${limitBullets} bullet points per summary (${limitWords} words max).
         - Set "isSource" to true if "${hostname}" is a generalized review site, forum or other broad source of information about a variety of specific websites.
