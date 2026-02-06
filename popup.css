@@ -73,6 +73,11 @@ td {
     border-bottom: 1px solid #ddd;
 }
 
+td ul {
+    margin: 0;
+    padding-left: 8px;
+}
+
 th {
     background-color: #f2f2f2;
 }
@@ -102,8 +107,6 @@ th {
 }
 
 #sources-container {
-    margin-top: 15px;
-    border-top: 1px solid #ddd;
     padding-top: 10px;
 }
 
@@ -182,7 +185,7 @@ th {
 #provider-settings {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
     padding: 8px 12px;
     background: #f9f9f9;
     border-bottom: 1px solid #e0e0e0;
