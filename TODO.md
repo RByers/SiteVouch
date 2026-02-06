@@ -1,5 +1,3 @@
 - Don't attempt to compute site reputation for a site which has failed to load.
-- Include the trusted site set in the cache object and consider it stale when it doesn't match the current trusted site set.
-- Instead of prompting for a single review from all sources, structure the prompt and cache to do one gemini query per source. Even with the pro model, results don't seem to be grounded well in the requested trusted sources set.
 - Update the popup view to use a lightgrey background on rows where the provided URL's hostname does not match the hostname from our reputation list
 - Add an option (off by default) to the trusted sources list to "Use other sources from Google Search". This causes the prompt to change to indicate that additional sources should be included where relevant. 

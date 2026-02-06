@@ -1,10 +1,10 @@
 # SiteVouch
 
-SiteVouch is a Chrome extension for experimenting with [ideas](https://docs.google.com/document/d/1wTFafdHa-o3OYCKmYzEJGROrpSoxXN6DNXPltzdiUzg/edit?tab=t.0#heading=h.40o7mijeapa7) around built-in browser support for website reputation signalling. As just a weekend hobby project and rapid prototype, this was hacked together quickly using Gemini and Google Antigravity without any tests or other engineering rigour.
+SiteVouch is a Chrome extension for experimenting with [ideas](https://docs.google.com/document/d/1wTFafdHa-o3OYCKmYzEJGROrpSoxXN6DNXPltzdiUzg/edit?tab=t.0#heading=h.40o7mijeapa7) around built-in browser support for website reputation signalling. This is just a weekend hobby project hacked together quickly using Gemini and Google Antigravity without tests or other engineering rigour.
 
 ## Vision
 
-Users sometimes consult reviews and ratings of websites to help determine how much they should be trusted, but this is laborious. Browsers can help by automating this task and proactively providing a summary of what the user would discover if they had put the effort into their own preferred approach to reputation checking.
+Users sometimes consult reviews and ratings of websites to help determine how much they should be trusted, but this is laborious. Browsers can help by automating this task and proactively providing a summary of what the user would discover if they had put the effort into their own preferred approach to reputation checking. Done well, this could bring the benefits of ratings and reviews so essential to successful walled garden ecosystems (eg. YouTube, Amazon, etc.) to the decentralized and open content ecosystem of the web.
 
 ## Goals
 - Automatically indicate whether a website is reputable, disreputable or of mixed reputation while browsing. Zero clicks or configuration required (beyond providing an API key).

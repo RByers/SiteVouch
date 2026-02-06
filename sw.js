@@ -259,9 +259,10 @@ async function performGeminiQuery(hostname) {
         return;
     }
 
+    const sanitizedTarget = sanitizeSource(hostname);
     const cleanSourceDomains = sources ? getActiveSources(sources, limitProviders)
         .map(sanitizeSource)
-        .filter(s => s && s.length > 0) : [];
+        .filter(s => s && s.length > 0 && s !== sanitizedTarget) : [];
 
     let prompt;
     if (cleanSourceDomains.length > 0) {
