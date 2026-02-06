@@ -277,18 +277,16 @@ async function performGeminiQuery(hostname) {
 
         Goal: Find valid reputation signals strictly from the trusted sources.
 
-        Step 1: execute Google Search queries to find reviews on each of the following websites: ${cleanSourceDomains.join(', ')}
-        **CRITICAL: You must construct your search queries using the "site:" operator.** 
-         - Example: "site:${cleanSourceDomains[0]} ${hostname} reviews"    
+        Step 1: Execute ONE Google Search query to find reviews on each of the following websites: ${cleanSourceDomains.join(', ')}
         Step 2: For each result, verify it is a review page for the SPECIFIC target hostname.
-        Step 3: Extract the rating (or estimate sentiment 0-5) and summary.
+        Step 3: If so, extract the rating (or estimate sentiment 0-5) and summary of reviews.
         Step 4: Determine if "${hostname}" itself is a "Reputation Source" (a platform hosting reviews or discussions of a wide variety of websites).
 
         Rules:
-        - Do NOT search the broad web. Only use the sources listed.
-        - Do NOT invent URLs. Use the exact "source_title" anchor to locate the link.
+        - Do NOT consulte sources other than those provided.
+        - Include the URL of review page summarized using the search grounding tool. Use an empty string if unsure.
         - Return at most ${limitBullets} bullet points per summary (${limitWords} words max).
-        - Set "isSource" to true if "${hostname}" is a generalized review site, forum or other source of information about a variety of websites and businesses.
+        - Set "isSource" to true if "${hostname}" is a generalized review site, forum or other broad source of information about a variety of specific websites.
         `;
     } else {
         prompt = `
@@ -314,12 +312,12 @@ async function performGeminiQuery(hostname) {
                 "items": {
                     "type": "OBJECT",
                     "properties": {
-                        "source": { "type": "STRING", "description": "Name of the review source (e.g. Trustpilot)" },
-                        "url": { "type": "STRING", "description": "Direct URL to the review page" },
+                        "source": { "type": "STRING", "description": "Hostname of the source of the review" },
+                        "url": { "type": "STRING", "description": "Direct URL to the review page or empty if unsure" },
                         "rating": { "type": "NUMBER", "description": "Star rating from 0 to 5" },
                         "summary": {
                             "type": "ARRAY",
-                            "description": `Key points summarizing the reputation, max ${limitBullets} points`,
+                            "description": `Key points summarizing the reputation from this source, max ${limitBullets} points`,
                             "items": { "type": "STRING", "description": `Bullet point summary (max ${limitWords} words)` }
                         }
                     },

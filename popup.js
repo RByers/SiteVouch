@@ -211,10 +211,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         reviews.forEach(review => {
             const summaryList = Array.isArray(review.summary) ? review.summary.map(s => `<li>${s}</li>`).join('') : review.summary;
             const ratingHtml = getStarRatingHtml(review.rating || 0);
+            const sourceHtml = review.url ? `<a class="source-link" data-url="${review.url}">${review.source}</a>` : review.source;
 
             tableHtml += `
                 <tr>
-                    <td><a class="source-link" data-url="${review.url}">${review.source}</a></td>
+                    <td>${sourceHtml}</td>
                     <td>${ratingHtml}</td>
                     <td><ul>${summaryList}</ul></td>
                 </tr>
