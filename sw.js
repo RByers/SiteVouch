@@ -15,15 +15,34 @@ function calculateRating(reviews) {
     return sum / reviews.length;
 }
 
+async function updateBadgesForHostname(hostname, reviews) {
+    if (!hostname) return;
+    try {
+        const tabs = await chrome.tabs.query({ url: `*://${hostname}/*` });
+        if (tabs && tabs.length > 0) {
+            const tabIds = tabs.map(t => t.id);
+            await updateBadgeForRating(tabIds, reviews);
+        }
+    } catch (e) {
+        console.error("Broadcast Badge Error", e);
+    }
+}
+
 // Helper: Determine badge from avg rating
-async function updateBadgeForRating(tabId, reviews) {
-    if (!tabId) {
-        console.error("updateBadgeForRating called without tabId");
+async function updateBadgeForRating(tabIdsInput, reviews) {
+    if (!tabIdsInput) {
+        console.error("updateBadgeForRating called without tabIds");
         return;
     }
+    const tabIds = Array.isArray(tabIdsInput) || tabIdsInput instanceof Set ? Array.from(tabIdsInput) : [tabIdsInput];
+
+    if (tabIds.length === 0) return;
+
     if (!reviews || reviews.length === 0) {
         // Clear badge if no data
-        await chrome.action.setBadgeText({ text: "", tabId }).catch(() => { });
+        for (const tid of tabIds) {
+            await chrome.action.setBadgeText({ text: "", tabId: tid }).catch(() => { });
+        }
         return;
     }
 
@@ -44,9 +63,11 @@ async function updateBadgeForRating(tabId, reviews) {
     }
 
     try {
-        await chrome.action.setBadgeTextColor({ color: "#000000", tabId });
-        await chrome.action.setBadgeText({ text: text, tabId });
-        await chrome.action.setBadgeBackgroundColor({ color: color, tabId });
+        for (const tid of tabIds) {
+            await chrome.action.setBadgeTextColor({ color: "#000000", tabId: tid }).catch(() => { });
+            await chrome.action.setBadgeText({ text: text, tabId: tid }).catch(() => { });
+            await chrome.action.setBadgeBackgroundColor({ color: color, tabId: tid }).catch(() => { });
+        }
     } catch (e) {
         // Tab likely closed
     }
@@ -160,23 +181,33 @@ async function pruneCache() {
 // Queue & Processing Logic
 // ---------------------------------------------------------
 
-function addToQueue(hostname, forceRefresh = false, tabId = null) {
+function addToQueue(hostname, forceRefresh = false) {
     const existingIndex = queryQueue.findIndex(item => item.hostname === hostname);
+
+    let existingItem = null;
 
     // Check if it's already in the queue
     if (existingIndex !== -1) {
-        if (forceRefresh) queryQueue[existingIndex].forceRefresh = true;
-        if (tabId) queryQueue[existingIndex].tabId = tabId;
-        return;
+        // Remove it so we can re-add to front (LIFO / Move-to-front)
+        existingItem = queryQueue.splice(existingIndex, 1)[0];
     }
 
     // Check if it's currently being processed
     if (currentTask && currentTask.hostname === hostname) {
-        if (tabId) currentTask.tabId = tabId;
+        if (forceRefresh) currentTask.forceRefresh = true;
         return;
     }
 
-    queryQueue.push({ hostname, forceRefresh, tabId });
+    // Prepare item
+    const item = existingItem || { hostname };
+
+    // Update/Merge properties
+    if (forceRefresh) item.forceRefresh = true;
+    // Note: tabId is used for handleNavigation immediate feedback but not stored/needed for broadcast
+
+    // Add to FRONT (LIFO / Stack behavior)
+    queryQueue.unshift(item);
+
     if (!currentTask) processQueue();
     broadcastStatus(); // Notify popup
 }
@@ -193,7 +224,7 @@ async function processQueue() {
         if (!currentTask.forceRefresh) {
             const cached = await getFromCache(currentTask.hostname);
             if (cached && !cached.isStale) {
-                await updateBadgeForRating(currentTask.tabId, cached.reviews);
+                await updateBadgesForHostname(currentTask.hostname, cached.reviews);
                 currentTask = null;
                 processQueue();
                 return;
@@ -204,7 +235,7 @@ async function processQueue() {
 
         const freshData = await getFromCache(currentTask.hostname);
         if (freshData) {
-            await updateBadgeForRating(currentTask.tabId, freshData.reviews);
+            await updateBadgesForHostname(currentTask.hostname, freshData.reviews);
             lastError = null;
             currentTask = null;
             processQueue();
@@ -441,7 +472,7 @@ async function handleNavigation(tabId, url) {
             if (!cached.isStale) return;
         }
 
-        addToQueue(hostname, false, tabId);
+        addToQueue(hostname, false);
 
     } catch (e) {
         console.error("Nav Error", e);
@@ -502,7 +533,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     if (request.type === 'REFRESH') {
         const hostname = request.hostname;
-        addToQueue(hostname, true, request.tabId);
+        addToQueue(hostname, true);
         sendResponse({ joined: true });
     }
 });
