@@ -37,7 +37,7 @@ Users sometimes consult reviews and ratings of websites to help determine how mu
  Right click on the SiteVouch icon and select "Options"
  - Get a [Gemini API key](https://aistudio.google.com/api-keys) and paste it here.
  - Start browsing and watch the extension icon. Manually consult some site reviews, and the extension should learn to search those sources automatically.
-
+ 
 ## FAQ
 
 **Q) Isn't relying on the user's choice of sources just going to reinforce their biases (like a "filter buuble")?
@@ -52,3 +52,18 @@ A) That would certainly be valuable, but doing per-page analysis adds a host of 
 
 A) In a real built-in browser implementation we'd likely cache host/source results on a server. This would make it close to instant most of the time.
 
+## Some possible reputation sources
+
+While many are imperfect, I've found using a reputation sources including the below to generally be useful.
+
+- [Reddit.com](https://www.reddit.com/)
+- [Quora.com](https://www.quora.com/)
+- [Wikipedia.org](https://www.wikipedia.org/)
+- [BBB.org](https://bbb.org)
+- [Urlscan.io](https://urlscan.io/)
+- [TrustPilot.com](https://trustpilot.com)
+- [ScamAdvisor.com](https://scamadviser.com)
+- [Media Bias/Fact Check](https://mediabiasfactcheck.com/)
+- [NewsTrust](https://newstrust.com/)
+- [AllSides](https://www.allsides.com/)
+- [Ad Fontes Media](https://www.adfontesmedia.com/)
