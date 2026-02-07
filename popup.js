@@ -197,6 +197,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
+        // Sort: Matching sources first
+        const sortedReviews = [...reviews].sort((a, b) => {
+            // Treat undefined matchingSource as false (or handle legacy data)
+            // Ideally new data has true/false. 
+            // If a is matching/true and b is not, a comes first (-1)
+            const aMatch = a.matchingSource === true;
+            const bMatch = b.matchingSource === true;
+            if (aMatch && !bMatch) return -1;
+            if (!aMatch && bMatch) return 1;
+            return 0;
+        });
+
         let tableHtml = `
             <table>
                 <thead>
@@ -209,13 +221,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <tbody>
         `;
 
-        reviews.forEach(review => {
+        sortedReviews.forEach(review => {
             const summaryList = Array.isArray(review.summary) ? review.summary.map(s => `<li>${s}</li>`).join('') : review.summary;
             const ratingHtml = getStarRatingHtml(review.rating || 0);
             const sourceHtml = review.url ? `<a class="source-link" data-url="${review.url}">${review.source}</a>` : review.source;
 
+            const notMatching = review.matchingSource === false;
+            const rowStyle = notMatching ? 'style="background-color: #f5f5f5; color: #777;"' : '';
+
             tableHtml += `
-                <tr>
+                <tr ${rowStyle}>
                     <td>${sourceHtml}</td>
                     <td>${ratingHtml}</td>
                     <td><ul>${summaryList}</ul></td>

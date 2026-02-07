@@ -11,8 +11,14 @@ let lastError = null; // Store the last error that occurred during processing
 
 function calculateRating(reviews) {
     if (!reviews || reviews.length === 0) return null;
-    const sum = reviews.reduce((acc, r) => acc + (r.rating || 0), 0);
-    return sum / reviews.length;
+
+    // Filter out non-matching sources
+    const validReviews = reviews.filter(r => r.matchingSource !== false);
+
+    if (validReviews.length === 0) return null;
+
+    const sum = validReviews.reduce((acc, r) => acc + (r.rating || 0), 0);
+    return sum / validReviews.length;
 }
 
 async function updateBadgesForHostname(hostname, reviews) {
@@ -281,6 +287,21 @@ function sanitizeSource(source) {
     return s;
 }
 
+function isMatchingSource(source, trustedSources) {
+    if (!source) return false;
+    const s = sanitizeSource(source);
+
+    return trustedSources.some(trusted => {
+        const t = sanitizeSource(trusted);
+        if (s === t) return true;
+        // Check if s is a subdomain of t (e.g. en.wikipedia.org vs wikipedia.org)
+        if (s.endsWith('.' + t)) return true;
+        // Check if t is a subdomain of s (e.g. wikipedia.org vs en.wikipedia.org)
+        if (t.endsWith('.' + s)) return true;
+        return false;
+    });
+}
+
 async function performGeminiQuery(hostname) {
     const { geminiApiKey, sources, preferredModel, maxBullets, maxWords, maxProviders, autoAddSources, lastSettingsChange } =
         await chrome.storage.sync.get(['geminiApiKey', 'sources', 'preferredModel', 'maxBullets', 'maxWords', 'maxProviders', 'autoAddSources', 'lastSettingsChange']);
@@ -343,7 +364,7 @@ async function performGeminiQuery(hostname) {
                 "items": {
                     "type": "OBJECT",
                     "properties": {
-                        "source": { "type": "STRING", "description": "Hostname of the source of the review" },
+                        "source": { "type": "STRING", "description": "Hostname of the source of the review, or empty string if unsure" },
                         "url": { "type": "STRING", "description": "Direct URL to the review page or empty if unsure" },
                         "rating": { "type": "NUMBER", "description": "Star rating from 0 to 5" },
                         "summary": {
@@ -375,6 +396,7 @@ async function performGeminiQuery(hostname) {
     });
 
     const duration = (Date.now() - startTime) / 1000;
+
     const result = await response.json();
     console.log(`Gemini API Response in ${duration}s:`, result);
 
@@ -387,6 +409,13 @@ async function performGeminiQuery(hostname) {
 
     const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
     const jsonResult = JSON.parse(text);
+
+    // Post-process reviews to add matchingSource flag
+    if (jsonResult.reviews && Array.isArray(jsonResult.reviews)) {
+        jsonResult.reviews.forEach(review => {
+            review.matchingSource = isMatchingSource(review.source, cleanSourceDomains);
+        });
+    }
 
     // Auto-add logic
     if (jsonResult.isSource && shouldAutoAdd) {
